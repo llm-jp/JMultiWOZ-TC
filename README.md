@@ -4,29 +4,29 @@
 
 # set up
 以下のライブラリをインストール
-'''bash
+```bash
 python -m venv .venv
 pip install vllm
 source .venv/bin/activate
-'''
+```
 
 # 実行方法
 
 Qwen3-14Bを評価に使用する場合
-'''bash
+```bash
 vllm serve Qwen/Qwen3-14B --port 8000 --enable-auto-tool-choice --tool-call-parser hermes
-'''
+```
 
 別のターミナルで実行
-'''bash
+```bash
 source .venv/bin/activate
 python test.py
-'''
+```
 
 
-ジョブファイルを投げる場合は test.sh の以下の部分を使用するモデルによって書き換えて実行する
-'''bash
+ジョブファイルを投げる場合は'test.sh'の以下の部分を使用するモデルによって書き換えて実行する
+```bash
 MODEL="Qwen/Qwen3-32B"
 PORT=8000
 parser="hermes"
-'''
+```
