@@ -118,4 +118,4 @@ sbatch generate.sh
 本リポジトリおよび JMultiWOZ-TC データは Creative Commons Attribution 4.0 International (CC BY 4.0) で公開します。
 詳細: https://creativecommons.org/licenses/by/4.0/
 
-なお、外部のモデルや原典データ（例: MultiWOZ）の利用にあたっては、各プロジェクトのライセンスに従ってください。
+なお、外部のモデルや原典データ（例: JMultiWOZ）の利用にあたっては、各プロジェクトのライセンスに従ってください。
