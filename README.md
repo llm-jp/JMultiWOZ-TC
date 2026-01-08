@@ -1,7 +1,10 @@
 # JMultiWOZ-TC
-マルチターン対話におけるエージェントの Function Calling 能力を、ツール使用有無の判断とツール呼び出し精度の両面から評価するためのリポジトリです。
+マルチターン対話におけるエージェントのツール呼び出し能力を、ツール呼び出し判定とツール呼び出し正答率の両面から評価するためのベンチマークデータセットです。
 
 論文サイト: https://cl-ait.github.io/Website-JMultiWOZ-TC/
+
+本ベンチマーク(JMultiWOZ-TC)は、JMultiWOZ に基づく対話データをツール呼び出し形式へ再構築した評価用データセットです。
+- JMultiWOZ GitHub: https://github.com/nu-dialogue/jmultiwoz
 
 ## 概要
 - サーバ: vLLM を OpenAI 互換エンドポイントとして起動（`--enable-auto-tool-choice` と `--tool-call-parser hermes` を使用）
@@ -13,14 +16,12 @@
 - `jmultiwoz_tc_input.json`: 入力（ユーザ質問/対話）NDJSON
 - `jmultiwoz_tc_ground.json`: 正解ツール呼び出し NDJSON
 
-これらは大きい場合があります。未配置の場合は適切に取得・展開して配置してください（例: 配布物や [JMultiWOZ-TC_data.zip](JMultiWOZ-TC_data.zip) の展開）。
-
 ## 動作要件
 - Python 3.10+
 - GPU 環境推奨（vLLM のモデル推論のため）。CPU でも起動はできますが大規模モデルは非推奨です。
 
 ## セットアップ
-以下を順に実施してください（macOS想定）。
+以下を順に実施してください。
 
 1) 必要ファイルの配置（ルート直下）
 - `tools.json`（ツール定義）
@@ -114,4 +115,7 @@ sbatch generate.sh
 詳細・対象モデルの最新情報は上記ドキュメントの各セクション（Hermes/Mistral/Llama/Qwen など）を参照してください。`--enable-auto-tool-choice` と併用することで自動ツール選択が有効になります。
 
 ## ライセンス/クレジット
-データセットやモデルのライセンスに従ってご利用ください。本リポジトリの目的は評価手順の提供です。
+本リポジトリおよび JMultiWOZ-TC データは Creative Commons Attribution 4.0 International (CC BY 4.0) で公開します。
+詳細: https://creativecommons.org/licenses/by/4.0/
+
+なお、外部のモデルや原典データ（例: MultiWOZ）の利用にあたっては、各プロジェクトのライセンスに従ってください。
