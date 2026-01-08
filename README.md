@@ -24,9 +24,17 @@ python test.py
 ```
 
 
-ジョブファイルを投げる場合は`test.sh`の以下の部分を使用するモデルによって書き換えて実行する
+ジョブファイルを投げる場合は`generate.sh`の以下の部分を使用するモデルによって書き換えて実行する
 ```bash
 MODEL="Qwen/Qwen3-32B"
 PORT=8000
 parser="hermes"
+```
+
+# 評価
+
+`{MODEL_GENERATE_RESULT}.json`には`generate.py`によって生成されたjsonファイル名を入力する
+`evaluate.py`を用いてモデルの出力と正解データを比較する
+```bash
+python evaluate.py --result {MODEL_GENERATE_RESULT}.json
 ```
