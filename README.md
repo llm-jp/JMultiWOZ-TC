@@ -6,11 +6,12 @@
 ## 概要
 - サーバ: vLLM を OpenAI 互換エンドポイントとして起動（`--enable-auto-tool-choice` と `--tool-call-parser hermes` を使用）
 - 生成: [generate.py](generate.py) が OpenAI SDK 経由でモデルに問い合わせ、NDJSON 形式の `result_{model}.json` を出力
-- 評価: [evaluate.py](evaluate.py) が `tool_use_ja_ground.json` とモデル出力を比較し、主要指標のサマリと `score_{model}.json` を出力
+- 評価: [evaluate.py](evaluate.py) が `jmultiwoz_tc_ground.json` とモデル出力を比較し、主要指標のサマリと `score_{model}.json` を出力
 
 必要ファイル（ルート直下）
-- `tool_use_ja_input.json`: 入力（ユーザ質問/対話）NDJSON
-- `tool_use_ja_ground.json`: 正解ツール呼び出し NDJSON
+- `tools.json`: ツール定義（Function Calling の仕様）。[generate.py](generate.py)が読み込みます。
+- `jmultiwoz_tc_input.json`: 入力（ユーザ質問/対話）NDJSON
+- `jmultiwoz_tc_ground.json`: 正解ツール呼び出し NDJSON
 
 これらは大きい場合があります。未配置の場合は適切に取得・展開して配置してください（例: 配布物や [JMultiWOZ-TC_data.zip](JMultiWOZ-TC_data.zip) の展開）。
 
@@ -19,14 +20,33 @@
 - GPU 環境推奨（vLLM のモデル推論のため）。CPU でも起動はできますが大規模モデルは非推奨です。
 
 ## セットアップ
+以下を順に実施してください（macOS想定）。
+
+1) 必要ファイルの配置（ルート直下）
+- `tools.json`（ツール定義）
+- `jmultiwoz_tc_input.json`（入力NDJSON）
+- `jmultiwoz_tc_ground.json`（正解NDJSON）
+
+配置後の存在確認例:
+```bash
+ls -1 tools.json jmultiwoz_tc_input.json jmultiwoz_tc_ground.json
+```
+
+2) Python環境の準備と依存インストール
 ```bash
 # 仮想環境の作成と有効化（macOS/Linux）
 python -m venv .venv
 source .venv/bin/activate
 
-# 依存関係のインストール
+# 依存関係（サーバ+クライアント）
+# - vLLM: OpenAI互換APIサーバ
+# - openai/httpx: クライアント（generate.py で使用）
 pip install -U vllm openai httpx
 ```
+
+補足:
+- vLLMでモデルを初回起動すると、自動でモデルを取得します（公開モデルのみ）。私有モデルは適切な認証設定が必要です。
+- 既定の接続先は `http://localhost:8000/v1` です。ポート`8000`を他プロセスが使用していないことを確認してください。
 
 ## 使い方（ローカル）
 1) vLLM サーバを起動（例: Qwen3-14B）
@@ -69,10 +89,10 @@ sbatch generate.sh
 ## ファイル構成
 - [generate.py](generate.py):
 	- OpenAI 互換エンドポイント（既定: `http://localhost:8000/v1`）に接続
-	- `tool_use_ja_input.json` を逐次処理し、Function Calling の結果を `result_{safe_model_name}.json` に追記
+	- `jmultiwoz_tc_input.json` を逐次処理し、Function Calling の結果を `result_{safe_model_name}.json` に追記
 	- 途中再開に対応（既存出力の `data_id` をスキップ）
 - [evaluate.py](evaluate.py):
-	- `--result` で指定した NDJSON と `tool_use_ja_ground.json` を比較
+	- `--result` で指定した NDJSON と `jmultiwoz_tc_ground.json` を比較
 	- 指標: 全体厳密一致、ツール使用判断、ツール不使用判断、両者合算、tool call 精度（厳密一致）
 	- 出力: サマリ5行 + 誤答ログ（NDJSON）を `score_{safe_model_name}.json` に保存
 - [generate.sh](generate.sh): Slurm 用ジョブスクリプト（任意）
