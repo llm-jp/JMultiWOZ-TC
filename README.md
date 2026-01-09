@@ -4,7 +4,7 @@ AIエージェントのツール呼び出しを評価するためのデータセ
 論文サイト: https://cl-ait.github.io/Website-JMultiWOZ-TC/
 
 ## AIエージェント用評価データセット
-- `jmultiwoz_tc_input.json` をモデル入力に用い、モデルが生成したツール呼び出しを `jmultiwoz_tc_ground.json` と比較して評価します。
+`jmultiwoz_tc_input.json` をモデル入力に用い、モデルが生成したツール呼び出しを `jmultiwoz_tc_ground.json` と比較して評価します。
 
 ### データ構成（展開後）
 `JMultiWOZ-TC_data.zip` を解凍すると、以下のディレクトリが展開されます。
