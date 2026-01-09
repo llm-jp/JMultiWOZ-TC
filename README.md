@@ -15,14 +15,6 @@ JMultiWOZ-TC_data/
 └── jmultiwoz_tc_ground.json  # 正解ツール呼び出し（評価用アノテーション）
 ```
 
-### 展開方法（macOS）
-- Finderで `JMultiWOZ-TC_data.zip` をダブルクリック
-- またはターミナル:
-
-```bash
-unzip JMultiWOZ-TC_data.zip
-```
-
 ### ファイル説明
 - `jmultiwoz_tc_input.json`: モデルがツール呼び出しを推定するための入力（ユーザ発話や対話コンテキスト）。
 - `jmultiwoz_tc_ground.json`: 対応する正解のツール呼び出しアノテーション（評価指標算出に使用）。
