@@ -1,8 +1,6 @@
 # JMultiWOZ-TC
 AIエージェントのツール呼び出しを評価するためのデータセットです。本データセットは，JMultiWOZを加工することで構築しており、4,246 対話に含まれるユーザ発話 31,303 発話に対して、合計 16,510 個のツール呼び出しが付与されています。
 
-論文サイト: https://cl-ait.github.io/Website-JMultiWOZ-TC/
-
 ## AIエージェント用評価データセット
 `jmultiwoz_tc_input.json` をモデル入力に用い、モデルが生成したツール呼び出しを `jmultiwoz_tc_ground.json` と比較して評価します。
 
@@ -20,7 +18,7 @@ JMultiWOZ-TC_data/
 - `jmultiwoz_tc_ground.json`: 対応する正解のツール呼び出しアノテーション（評価指標算出に使用）。
 
 ## スクリプト
-- 公開準備中
+- 評価用のスクリプトは2026年3月上旬に公開予定です
 
 ## ライセンス/クレジット
 JMultiWOZ-TC データは Creative Commons Attribution 4.0 International (CC BY 4.0) で公開します。
