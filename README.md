@@ -9,7 +9,7 @@ AIエージェントのツール呼び出しを評価するためのデータセ
 ### データ構成（展開後）
 `JMultiWOZ-TC_data.zip` を解凍すると、以下のディレクトリが展開されます。
 
-```
+```bash
 JMultiWOZ-TC_data/
 ├── jmultiwoz_tc_input.json   # 評価入力（ユーザ発話・コンテキスト）
 └── jmultiwoz_tc_ground.json  # 正解ツール呼び出し（評価用アノテーション）
