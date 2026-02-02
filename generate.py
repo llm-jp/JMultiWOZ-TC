@@ -3,13 +3,33 @@ from pathlib import Path
 import argparse
 
 
-def load_json(file_path):  # JSONファイルを読み込む
+def load_tools(file_path):
+    """ツール定義JSONを読み込む
+
+    JMultiWOZを元に定義したツールを格納したJSONファイルを読み込み，その内容を返す．
+
+    Args:
+        tools_path (Path): ツールJSONファイルのパス．
+
+    Returns:
+        dict: ツールのリスト．
+    """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data
 
 
-def load_jsonl(file_path):  # NDJSONファイルを読み込む
+def load_jsonl(file_path):
+    """JSONLを行単位で読み込む
+
+    JSONLファイルを1行=1レコードとして読み込み、各行のJSONを配列として返す．
+
+    Args:
+        file_path (Path): 読み込むJSONLファイルのパス．
+
+    Returns:
+        list: 1行1レコードのJSONオブジェクトのリスト．
+    """
     data = []
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
