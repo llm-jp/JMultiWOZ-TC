@@ -12,7 +12,7 @@ def load_tools(file_path):
         tools_path (Path): ツールJSONファイルのパス．
 
     Returns:
-        dict: ツールのリスト．
+        list[dict]: ツール定義（各要素が辞書）のリスト．
     """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -28,7 +28,7 @@ def load_jsonl(file_path):
         file_path (Path): 読み込むJSONLファイルのパス．
 
     Returns:
-        list: 1行1レコードのJSONオブジェクトのリスト．
+        list[dict]: 1行1レコードのJSONオブジェクト（辞書）のリスト．
     """
     data = []
     with open(file_path, "r", encoding="utf-8") as f:
@@ -54,5 +54,5 @@ def main():
 
     args = parser.parse_args()  # 引数を解析
 
-    tools = load_json(args.tools)  # ツールリストの読み込み
+    tools = load_tools(args.tools)  # ツールリストの読み込み
     input_data = load_jsonl(args.input)  # 入力データの読み込み
