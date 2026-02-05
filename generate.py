@@ -1,6 +1,10 @@
 import json
 from pathlib import Path
 import argparse
+from openai import OpenAI
+
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
 
 
 def load_tools(file_path):
@@ -37,6 +41,22 @@ def load_jsonl(file_path):
     return data
 
 
+def get_model_and_safe_name() -> tuple[str, str]:
+    """モデル名の取得
+
+    モデル名を取得し、ファイル名に利用できるようスラッシュをアンダースコアへ置換した名称も返す。
+
+    Args:
+        なし。
+
+    Returns:
+        tuple[str, str]: (モデル名, サニタイズ済みモデル名)。
+    """
+    model_name = client.models.list().data[0].id
+    safe_model_name = model_name.replace("/", "_")
+    return model_name, safe_model_name
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -56,3 +76,5 @@ def main():
 
     tools = load_tools(args.tools)  # ツールリストの読み込み
     input_data = load_jsonl(args.input)  # 入力データの読み込み
+
+    model_name, safe_model_name = get_model_and_safe_name()
