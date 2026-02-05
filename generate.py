@@ -12,7 +12,7 @@ def load_tools(file_path):
         tools_path (Path): ツールJSONファイルのパス．
 
     Returns:
-        dict: ツール定義の辞書．
+        list: ツール定義のリスト．
     """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
