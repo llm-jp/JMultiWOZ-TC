@@ -55,6 +55,41 @@ def get_model_and_safe_name(client) -> tuple[str, str]:
     return model_name, safe_model_name
 
 
+def load_existing_data(output_path: Path) -> set:
+    """出力ファイル作成と既存データIDの収集
+
+    出力JSONLが存在する場合は既存レコードからdata_idを収集し、
+    存在しない場合は新規でファイルを作成する。
+
+    Args:
+        output_path (Path): 出力JSONLファイルのパス。
+
+    Returns:
+        set[str]: 既存のdata_idの集合。
+    """
+    existing_ids = set()
+    if output_path.exists():
+        try:
+            with open(output_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                        if isinstance(rec, dict):
+                            if "data_id" in rec:
+                                existing_ids.add(rec["data_id"])
+                    except Exception:
+                        pass
+            print(f"既存の出力を検出: {len(existing_ids)}件をスキップして再開します")
+        except Exception as e:
+            print(f"既存出力の読み取りエラー: {e}")
+    else:
+        open(output_path, "w").close()
+    return existing_ids
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -90,3 +125,6 @@ def main():
     input_data = load_jsonl(args.input)
 
     model_name, safe_model_name = get_model_and_safe_name(client)
+
+    output_path = Path(f"result_{safe_model_name}.jsonl")
+    existing_ids = load_existing_data(output_path)
