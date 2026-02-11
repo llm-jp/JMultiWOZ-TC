@@ -4,9 +4,6 @@ import argparse
 from openai import OpenAI
 
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
-
-
 def load_tools(file_path):
     """ツール定義JSONを読み込む
 
@@ -41,16 +38,17 @@ def load_jsonl(file_path):
     return data
 
 
-def get_model_and_safe_name() -> tuple[str, str]:
+def get_model_and_safe_name(client) -> tuple[str, str]:
     """モデル名の取得
 
-    モデル名を取得し、ファイル名に利用できるようスラッシュをアンダースコアへ置換した名称も返す。
+    起動したvllmサーバーからモデル名を取得し、
+    ファイル名に利用できるようスラッシュをアンダースコアへ置換した名称も返す。
 
     Args:
-        なし。
+        client (OpenAI): 使用するOpenAIクライアントインスタンス。
 
     Returns:
-        tuple[str, str]: (モデル名, サニタイズ済みモデル名)。
+        tuple[str, str]: （モデル名, サニタイズ済みモデル名）。
     """
     model_name = client.models.list().data[0].id
     safe_model_name = model_name.replace("/", "_")
@@ -71,10 +69,24 @@ def main():
         default="jmultiwoz_tc_input.jsonl",
         help="JMultiWOZ-TCに含まれる入力データのファイルパスを指定",
     )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default="http://localhost:8000/v1",
+        help="vllmサーバーのベースURLを指定",
+    )
+    parser.add_argument(
+        "--openai-api-key",
+        type=str,
+        default="dummy",
+        help="OpenAI APIキーを指定",
+    )
 
-    args = parser.parse_args()  # 引数を解析
+    args = parser.parse_args()
 
-    tools = load_tools(args.tools)  # ツールリストの読み込み
-    input_data = load_jsonl(args.input)  # 入力データの読み込み
+    client = OpenAI(base_url=args.base_url, api_key=args.openai_api_key)
 
-    model_name, safe_model_name = get_model_and_safe_name()
+    tools = load_tools(args.tools)
+    input_data = load_jsonl(args.input)
+
+    model_name, safe_model_name = get_model_and_safe_name(client)
