@@ -234,13 +234,13 @@ def process_item(
         else []
     )
 
-    serializable_tool_calls_all = serialize_tool_calls(tool_calls)
-    log_tool_calls(serializable_tool_calls_all)
+    serializable_tool_calls = serialize_tool_calls(tool_calls)
+    log_tool_calls(serializable_tool_calls)
 
     llm_rec = build_success_record(
         data_id,
         dialogue_id,
-        serializable_tool_calls_all,
+        serializable_tool_calls,
     )
     append_jsonl_record(output_path, llm_rec)
     print("-" * 80)
