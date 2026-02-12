@@ -55,7 +55,7 @@ def get_model_and_safe_name(client) -> tuple[str, str]:
     return model_name, safe_model_name
 
 
-def load_existing_data(output_path: Path) -> set:
+def load_existing_data_ids(output_path: Path) -> set:
     """出力ファイル作成と既存データIDの収集
 
     出力JSONLが存在する場合は既存レコードからdata_idを収集し、
@@ -67,7 +67,7 @@ def load_existing_data(output_path: Path) -> set:
     Returns:
         set[str]: 既存のdata_idの集合。
     """
-    existing_ids = set()
+    existing_ids: set[str] = set()
     if output_path.exists():
         try:
             with open(output_path, "r", encoding="utf-8") as f:
@@ -116,6 +116,12 @@ def main():
         default="dummy",
         help="OpenAI APIキーを指定",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=".",
+        help="出力ファイルを保存するディレクトリを指定",
+    )
 
     args = parser.parse_args()
 
@@ -126,5 +132,5 @@ def main():
 
     model_name, safe_model_name = get_model_and_safe_name(client)
 
-    output_path = Path(f"result_{safe_model_name}.jsonl")
-    existing_ids = load_existing_data(output_path)
+    output_path = args.output_dir / f"result_{safe_model_name}.jsonl"
+    existing_ids = load_existing_data_ids(output_path)
