@@ -192,7 +192,8 @@ def append_jsonl_record(path: Path, record: dict):
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    with open(path, "a", encoding="utf-8") as out_f:
+        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def process_item(
