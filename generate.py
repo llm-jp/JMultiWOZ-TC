@@ -177,7 +177,11 @@ def build_success_record(
     Returns:
         dict: 成功時の出力レコード。
     """
-    raise NotImplementedError()
+    return {
+        "data_id": data_id,
+        "dialogue_id": dialogue_id,
+        "tool_calls": serializable_tool_calls,
+    }
 
 
 def append_jsonl_record(path: Path, record: dict):
