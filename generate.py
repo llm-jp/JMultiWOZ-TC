@@ -116,6 +116,21 @@ def output_with_retries(
     raise NotImplementedError()
 
 
+def build_timeout_record(data_id: str, dialogue_id: str) -> dict:
+    """タイムアウト時のレコード作成
+
+    API呼び出しがタイムアウトした場合に出力するレコード(dict)を生成する。
+
+    Args:
+        data_id (str): 入力データのID。
+        dialogue_id (str): 対応するダイアログID。
+
+    Returns:
+        dict: タイムアウトエラー内容を含むレコード。
+    """
+    raise NotImplementedError()
+
+
 def serialize_tool_calls(tool_calls) -> list:
     """ツール呼び出しをシリアライズ可能に整形
 
@@ -131,7 +146,41 @@ def serialize_tool_calls(tool_calls) -> list:
     raise NotImplementedError()
 
 
-def write_jsonl_record(path: Path, record: dict):
+def log_tool_calls(serializable_tool_calls: list):
+    """ツール呼び出し内容のログ出力
+
+    シリアライズ済みツール呼び出し配列を、人が読みやすい形式で出力する。
+
+    Args:
+        serializable_tool_calls (list): シリアライズ済みツール呼び出しの配列。
+
+    Returns:
+        None: なし。
+    """
+    raise NotImplementedError()
+
+
+def build_success_record(
+    data_id: str,
+    dialogue_id: str,
+    serializable_tool_calls: list,
+) -> dict:
+    """成功時の最終レコード生成
+
+    ツール呼び出し結果を含む、成功時の出力レコード(dict)を生成する。
+
+    Args:
+        data_id (str): 入力データのID。
+        dialogue_id (str): 対応するダイアログID。
+        serializable_tool_calls (list): シリアライズ済みツール呼び出しの配列。
+
+    Returns:
+        dict: 成功時の出力レコード。
+    """
+    raise NotImplementedError()
+
+
+def append_jsonl_record(path: Path, record: dict):
     """JSONLへ1レコードを書き出す
 
     指定された出力ファイルに、UTF-8の1行1JSONとしてレコードを追記する。
@@ -155,7 +204,7 @@ def process_item(
 ):
     """1レコードを処理して出力まで行う
 
-    1件の入力に対して、LLM出力の実行→ツール呼び出し整形→出力JSONLへの追記までを行う。
+    1件の入力に対して、LLM出力の実行→ツール呼び出しの整形→出力JSONLへの追記までを行う。
 
     Args:
         item (dict): 入力レコード。
@@ -174,14 +223,8 @@ def process_item(
     response, error = output_with_retries(client, model_name, messages, tools)
 
     if error == "TimeoutError":
-        print("✗ タイムアウトエラーで評価できませんでした。")
-        llm_rec = {
-            "data_id": data_id,
-            "dialogue_id": dialogue_id,
-            "tool_calls": [],
-            "error": "TimeoutError",
-        }
-        write_jsonl_record(output_path, llm_rec)
+        llm_rec = build_timeout_record(data_id, dialogue_id)
+        append_jsonl_record(output_path, llm_rec)
         print("-" * 80)
         return
 
@@ -190,29 +233,16 @@ def process_item(
         if response.choices[0].message.tool_calls
         else []
     )
+
     serializable_tool_calls_all = serialize_tool_calls(tool_calls)
+    log_tool_calls(serializable_tool_calls_all)
 
-    print(f"  ツール呼び出し件数: {len(serializable_tool_calls_all)}")
-    if serializable_tool_calls_all:
-        for i, call in enumerate(serializable_tool_calls_all, 1):
-            fn = call.get("function", {})
-            name = fn.get("name")
-            args = fn.get("arguments")
-            try:
-                args_str = json.dumps(args, ensure_ascii=False)
-            except Exception:
-                args_str = str(args)
-            print(f"    [{i}] name: {name}")
-            print(f"        arguments: {args_str}")
-    else:
-        print("    ツール呼び出しなし")
-
-    llm_rec = {
-        "data_id": data_id,
-        "dialogue_id": dialogue_id,
-        "tool_calls": serializable_tool_calls_all,
-    }
-    write_jsonl_record(output_path, llm_rec)
+    llm_rec = build_success_record(
+        data_id,
+        dialogue_id,
+        serializable_tool_calls_all,
+    )
+    append_jsonl_record(output_path, llm_rec)
     print("-" * 80)
 
 
