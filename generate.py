@@ -147,28 +147,22 @@ def write_jsonl_record(path: Path, record: dict):
 
 
 def process_item(
-    idx: int,
-    total: int,
     item: dict,
     tools,
     client,
     model_name: str,
     output_path: Path,
-    existing_ids: set,
 ):
     """1レコードを処理して出力まで行う
 
-    1件の入力に対して、既存出力結果の有無確認→API呼び出し→ツール呼び出し整形→出力JSONLへの追記までを行う。
+    1件の入力に対して、LLM出力の実行→ツール呼び出し整形→出力JSONLへの追記までを行う。
 
     Args:
-        idx (int): 現在の処理インデックス(1始まり)。
-        total (int): 全レコード数。
         item (dict): 入力レコード。
         tools (list): ツール定義。
         client (OpenAI): 使用する OpenAI クライアントインスタンス。
         model_name (str): 使用するモデル名。
         output_path (Path): 出力JSONLのパス。
-        existing_ids (set): 既に処理済みの `data_id` 。
 
     Returns:
         None: なし。
@@ -176,12 +170,6 @@ def process_item(
     data_id = item.get("data_id")
     dialogue_id = item.get("dialogue_id")
     messages = item["question"]
-
-    print(f"[{idx}/{total}] ID: {data_id}")
-    if data_id in existing_ids:
-        print("→ 既存結果ありのためスキップ")
-        print("-" * 80)
-        return
 
     response, error = output_with_retries(client, model_name, messages, tools)
 
@@ -277,13 +265,19 @@ def main():
     print(f"評価開始: {total}件のデータを実行します\n")
 
     for idx, item in enumerate(input_data, 1):
+        data_id = item.get("data_id")
+        print(f"[{idx}/{total}] ID: {data_id}")
+        if data_id in existing_ids:
+            print("→ 既存結果ありのためスキップ")
+            print("-" * 80)
+            continue
+
         process_item(
-            idx,
-            total,
             item,
             tools,
             client,
             model_name,
             output_path,
-            existing_ids,
         )
+
+    print(f"出力結果のJSONLを書き出しました: {output_path}\n")
