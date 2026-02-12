@@ -90,6 +90,162 @@ def load_existing_data_ids(output_path: Path) -> set:
     return existing_ids
 
 
+def output_with_retries(
+    client: OpenAI,
+    model_name: str,
+    messages,
+    tools,
+    max_retries: int = 3,
+):
+    """LLM出力の実行
+
+    タイムアウト(APITimeoutError/httpx.ReadTimeout)時に最大max_retries回まで再試行し、
+    最初に成功したレスポンスを返す。
+
+    Args:
+        client (OpenAI): 使用するOpenAIクライアントインスタンス。
+        model_name (str): 使用するモデル名。
+        messages (list[dict]): Chat Completions用のメッセージ配列。
+        tools (list): ツール定義。
+        max_retries (int): 再試行の最大回数。既定は `3`。
+
+    Returns:
+        tuple: (response, error) を返す。成功時は (response, None)、
+        タイムアウトで全失敗時は (None, "TimeoutError")。
+    """
+    raise NotImplementedError()
+
+
+def build_timeout_record(data_id: str, dialogue_id: str) -> dict:
+    """タイムアウト時のレコード作成
+
+    API呼び出しがタイムアウトした場合に出力するレコード(dict)を生成する。
+
+    Args:
+        data_id (str): 入力データのID。
+        dialogue_id (str): 対応するダイアログID。
+
+    Returns:
+        dict: タイムアウトエラー内容を含むレコード。
+    """
+    raise NotImplementedError()
+
+
+def serialize_tool_calls(tool_calls) -> list:
+    """ツール呼び出しをシリアライズ可能に整形
+
+    LLM出力の tool_calls を、後続処理や保存に適した辞書配列へ正規化する。
+    function.arguments が文字列の場合はJSONとしてのパースを行う。
+
+    Args:
+        tool_calls (list): モデル応答のツール呼び出し配列。
+
+    Returns:
+        list: シリアライズ可能な辞書形式のツール呼び出し配列。
+    """
+    raise NotImplementedError()
+
+
+def log_tool_calls(serializable_tool_calls: list):
+    """ツール呼び出し内容のログ出力
+
+    シリアライズ済みツール呼び出し配列を、人が読みやすい形式で出力する。
+
+    Args:
+        serializable_tool_calls (list): シリアライズ済みツール呼び出しの配列。
+
+    Returns:
+        None: なし。
+    """
+    raise NotImplementedError()
+
+
+def build_success_record(
+    data_id: str,
+    dialogue_id: str,
+    serializable_tool_calls: list,
+) -> dict:
+    """成功時の最終レコード生成
+
+    ツール呼び出し結果を含む、成功時の出力レコード(dict)を生成する。
+
+    Args:
+        data_id (str): 入力データのID。
+        dialogue_id (str): 対応するダイアログID。
+        serializable_tool_calls (list): シリアライズ済みツール呼び出しの配列。
+
+    Returns:
+        dict: 成功時の出力レコード。
+    """
+    raise NotImplementedError()
+
+
+def append_jsonl_record(path: Path, record: dict):
+    """JSONLへ1レコードを書き出す
+
+    指定された出力ファイルに、UTF-8の1行1JSONとしてレコードを追記する。
+
+    Args:
+        path (Path): 出力JSONLファイルのパス。
+        record (dict): 追記するレコード内容(辞書形式)。
+
+    Returns:
+        None: なし。
+    """
+    raise NotImplementedError()
+
+
+def process_item(
+    item: dict,
+    tools,
+    client,
+    model_name: str,
+    output_path: Path,
+):
+    """1レコードを処理して出力まで行う
+
+    1件の入力に対して、LLM出力の実行→ツール呼び出しの整形→出力JSONLへの追記までを行う。
+
+    Args:
+        item (dict): 入力レコード。
+        tools (list): ツール定義。
+        client (OpenAI): 使用する OpenAI クライアントインスタンス。
+        model_name (str): 使用するモデル名。
+        output_path (Path): 出力JSONLのパス。
+
+    Returns:
+        None: なし。
+    """
+    data_id = item.get("data_id")
+    dialogue_id = item.get("dialogue_id")
+    messages = item["question"]
+
+    response, error = output_with_retries(client, model_name, messages, tools)
+
+    if error == "TimeoutError":
+        llm_rec = build_timeout_record(data_id, dialogue_id)
+        append_jsonl_record(output_path, llm_rec)
+        print("-" * 80)
+        return
+
+    tool_calls = (
+        response.choices[0].message.tool_calls
+        if response.choices[0].message.tool_calls
+        else []
+    )
+
+    serializable_tool_calls = serialize_tool_calls(tool_calls)
+    log_tool_calls(serializable_tool_calls)
+
+    llm_rec = build_success_record(
+        data_id,
+        dialogue_id,
+        serializable_tool_calls,
+    )
+    append_jsonl_record(output_path, llm_rec)
+    print("-" * 80)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -134,3 +290,24 @@ def main():
 
     output_path = args.output_dir / f"result_{safe_model_name}.jsonl"
     existing_ids = load_existing_data_ids(output_path)
+
+    total = len(input_data)
+    print(f"評価開始: {total}件のデータを実行します\n")
+
+    for idx, item in enumerate(input_data, 1):
+        data_id = item.get("data_id")
+        print(f"[{idx}/{total}] ID: {data_id}")
+        if data_id in existing_ids:
+            print("→ 既存結果ありのためスキップ")
+            print("-" * 80)
+            continue
+
+        process_item(
+            item,
+            tools,
+            client,
+            model_name,
+            output_path,
+        )
+
+    print(f"出力結果のJSONLを書き出しました: {output_path}\n")
