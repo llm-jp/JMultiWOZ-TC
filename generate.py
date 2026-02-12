@@ -128,7 +128,13 @@ def build_timeout_record(data_id: str, dialogue_id: str) -> dict:
     Returns:
         dict: タイムアウトエラー内容を含むレコード。
     """
-    raise NotImplementedError()
+    print("✗ タイムアウトエラーで評価できませんでした。")
+    return {
+        "data_id": data_id,
+        "dialogue_id": dialogue_id,
+        "tool_calls": [],
+        "error": "TimeoutError",
+    }
 
 
 def serialize_tool_calls(tool_calls) -> list:
