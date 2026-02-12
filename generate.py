@@ -90,6 +90,144 @@ def load_existing_data_ids(output_path: Path) -> set:
     return existing_ids
 
 
+def output_with_retries(
+    client: OpenAI,
+    model_name: str,
+    messages,
+    tools,
+    max_retries: int = 3,
+):
+    """LLM出力の実行
+
+    タイムアウト(APITimeoutError/httpx.ReadTimeout)時に最大max_retries回まで再試行し、
+    最初に成功したレスポンスを返す。
+
+    Args:
+        client (OpenAI): 使用するOpenAIクライアントインスタンス。
+        model_name (str): 使用するモデル名。
+        messages (list[dict]): Chat Completions用のメッセージ配列。
+        tools (list): ツール定義。
+        max_retries (int): 再試行の最大回数。既定は `3`。
+
+    Returns:
+        tuple: (response, error) を返す。成功時は (response, None)、
+        タイムアウトで全失敗時は (None, "TimeoutError")。
+    """
+    raise NotImplementedError()
+
+
+def serialize_tool_calls(tool_calls) -> list:
+    """ツール呼び出しをシリアライズ可能に整形
+
+    LLM出力の tool_calls を、後続処理や保存に適した辞書配列へ正規化する。
+    function.arguments が文字列の場合はJSONとしてのパースを行う。
+
+    Args:
+        tool_calls (list): モデル応答のツール呼び出し配列。
+
+    Returns:
+        list: シリアライズ可能な辞書形式のツール呼び出し配列。
+    """
+    raise NotImplementedError()
+
+
+def write_jsonl_record(path: Path, record: dict):
+    """JSONLへ1レコードを書き出す
+
+    指定された出力ファイルに、UTF-8の1行1JSONとしてレコードを追記する。
+
+    Args:
+        path (Path): 出力JSONLファイルのパス。
+        record (dict): 追記するレコード内容(辞書形式)。
+
+    Returns:
+        None: なし。
+    """
+    raise NotImplementedError()
+
+
+def process_item(
+    idx: int,
+    total: int,
+    item: dict,
+    tools,
+    client,
+    model_name: str,
+    output_path: Path,
+    existing_ids: set,
+):
+    """1レコードを処理して出力まで行う
+
+    1件の入力に対して、既存出力結果の有無確認→API呼び出し→ツール呼び出し整形→出力JSONLへの追記までを行う。
+
+    Args:
+        idx (int): 現在の処理インデックス(1始まり)。
+        total (int): 全レコード数。
+        item (dict): 入力レコード。
+        tools (list): ツール定義。
+        client (OpenAI): 使用する OpenAI クライアントインスタンス。
+        model_name (str): 使用するモデル名。
+        output_path (Path): 出力JSONLのパス。
+        existing_ids (set): 既に処理済みの `data_id` 。
+
+    Returns:
+        None: なし。
+    """
+    data_id = item.get("data_id")
+    dialogue_id = item.get("dialogue_id")
+    messages = item["question"]
+
+    print(f"[{idx}/{total}] ID: {data_id}")
+    if data_id in existing_ids:
+        print("→ 既存結果ありのためスキップ")
+        print("-" * 80)
+        return
+
+    response, error = output_with_retries(client, model_name, messages, tools)
+
+    if error == "TimeoutError":
+        print("✗ タイムアウトエラーで評価できませんでした。")
+        llm_rec = {
+            "data_id": data_id,
+            "dialogue_id": dialogue_id,
+            "tool_calls": [],
+            "error": "TimeoutError",
+        }
+        write_jsonl_record(output_path, llm_rec)
+        print("-" * 80)
+        return
+
+    tool_calls = (
+        response.choices[0].message.tool_calls
+        if response.choices[0].message.tool_calls
+        else []
+    )
+    serializable_tool_calls_all = serialize_tool_calls(tool_calls)
+
+    print(f"  ツール呼び出し件数: {len(serializable_tool_calls_all)}")
+    if serializable_tool_calls_all:
+        for i, call in enumerate(serializable_tool_calls_all, 1):
+            fn = call.get("function", {})
+            name = fn.get("name")
+            args = fn.get("arguments")
+            try:
+                args_str = json.dumps(args, ensure_ascii=False)
+            except Exception:
+                args_str = str(args)
+            print(f"    [{i}] name: {name}")
+            print(f"        arguments: {args_str}")
+    else:
+        print("    ツール呼び出しなし")
+
+    llm_rec = {
+        "data_id": data_id,
+        "dialogue_id": dialogue_id,
+        "tool_calls": serializable_tool_calls_all,
+    }
+    write_jsonl_record(output_path, llm_rec)
+    print("-" * 80)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -134,3 +272,18 @@ def main():
 
     output_path = args.output_dir / f"result_{safe_model_name}.jsonl"
     existing_ids = load_existing_data_ids(output_path)
+
+    total = len(input_data)
+    print(f"評価開始: {total}件のデータを実行します\n")
+
+    for idx, item in enumerate(input_data, 1):
+        process_item(
+            idx,
+            total,
+            item,
+            tools,
+            client,
+            model_name,
+            output_path,
+            existing_ids,
+        )
