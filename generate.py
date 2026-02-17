@@ -146,14 +146,7 @@ def serialize_tool_calls(tool_calls) -> list:
     serializable = []
     for tc in tool_calls:
         if hasattr(tc, "function"):
-            try:
-                args_dict = (
-                    json.loads(tc.function.arguments)
-                    if isinstance(tc.function.arguments, str)
-                    else tc.function.arguments
-                )
-            except Exception:
-                args_dict = tc.function.arguments
+            args_dict = json.loads(tc.function.arguments)
             serializable.append(
                 {
                     "type": "function",
