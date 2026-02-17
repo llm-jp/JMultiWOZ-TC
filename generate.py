@@ -131,6 +131,10 @@ def output_with_retries(
             if attempt == max_retries:
                 error = "TimeoutError"
             time.sleep(2)
+        except Exception as e:
+            print(f"[Error] LLM実行中にエラーが発生しました: {e}")
+            error = f"Exception: {e}"
+            break
     return response, error
 
 
