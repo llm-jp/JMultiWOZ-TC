@@ -157,7 +157,20 @@ def log_tool_calls(serializable_tool_calls: list):
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    print(f"  ツール呼び出し件数: {len(serializable_tool_calls)}")
+    if serializable_tool_calls:
+        for i, call in enumerate(serializable_tool_calls, 1):
+            fn = call.get("function", {})
+            name = fn.get("name")
+            args = fn.get("arguments")
+            try:
+                args_str = json.dumps(args, ensure_ascii=False)
+            except Exception:
+                args_str = str(args)
+            print(f"    [{i}] name: {name}")
+            print(f"        arguments: {args_str}")
+    else:
+        print("    ツール呼び出しなし")
 
 
 def build_success_record(
