@@ -116,24 +116,28 @@ def output_with_retries(
     raise NotImplementedError()
 
 
-def build_timeout_record(data_id: str, dialogue_id: str) -> dict:
-    """タイムアウト時のレコード作成
+def build_error_record(data_id: str, dialogue_id: str, error: str) -> dict:
+    """エラー時のレコード作成
 
-    API呼び出しがタイムアウトした場合に出力するレコード(dict)を生成する。
+    API呼び出しがエラーした場合に出力するレコード(dict)を生成する。
 
     Args:
         data_id (str): 入力データのID。
         dialogue_id (str): 対応するダイアログID。
+        error (str): エラー内容。
 
     Returns:
-        dict: タイムアウトエラー内容を含むレコード。
+        dict: エラー内容を含むレコード。
     """
-    print("✗ タイムアウトエラーで評価できませんでした。")
+    if error == "TimeoutError":
+        print("✗ タイムアウトエラーで評価できませんでした。")
+    else:
+        print(f"✗ エラーで評価できませんでした: {error}")
     return {
         "data_id": data_id,
         "dialogue_id": dialogue_id,
         "tool_calls": [],
-        "error": "TimeoutError",
+        "error": error,
     }
 
 
@@ -228,8 +232,8 @@ def process_item(
 
     response, error = output_with_retries(client, model_name, messages, tools)
 
-    if error == "TimeoutError":
-        llm_rec = build_timeout_record(data_id, dialogue_id)
+    if error is not None:
+        llm_rec = build_error_record(data_id, dialogue_id, error)
         append_jsonl_record(output_path, llm_rec)
         print("-" * 80)
         return
