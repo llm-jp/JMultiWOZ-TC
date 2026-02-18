@@ -175,7 +175,23 @@ def serialize_tool_calls(tool_calls) -> list:
     Returns:
         list: シリアライズ可能な辞書形式のツール呼び出し配列。
     """
-    raise NotImplementedError()
+    serializable = []
+    for tc in tool_calls:
+        # 関数呼び出しがある場合のみシリアライズを必要とする
+        if hasattr(tc, "function"):
+            args_dict = json.loads(tc.function.arguments)
+            serializable.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": args_dict,
+                    },
+                }
+            )
+        else:
+            serializable.append(tc)
+    return serializable
 
 
 def log_tool_calls(serializable_tool_calls: list):
