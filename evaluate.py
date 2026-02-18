@@ -1,35 +1,23 @@
 import argparse
 import re
 from pathlib import Path
+from generate import load_jsonl
 
 
-def load_jsonl(file_path):
-    """JSONLを行単位で読み込む
-
-    JSONLファイルを1行=1レコードとして読み込み、各行のJSONを配列として返す．
-
-    Args:
-        file_path (Path): 読み込むJSONLファイルのパス．
-
-    Returns:
-        list[dict]: JSON（辞書）のリスト．
-    """
-    raise NotImplementedError()
-
-
-
-def canonicalize_arguments(args):
+def canonicalize_arguments(args: dict):
     """ツール引数を正規化した文字列へ変換
 
     generate.py(vLLM 経由)の出力および JMultiWOZ-TC の ground_truth に含まれる
     arguments フィールド（dict）を、比較・保存に適した一貫した
     文字列表現へ変換する。
 
-    辞書が渡された場合のみ、キー順をソートして JSON 文字列に変換する。
-    それ以外の型が渡された場合は、その値を str() で文字列化して返す。
+    引数は dict であることを前提とし、キー順をソートして JSON 文字列に変換する。
+
+    例: 入力: {"name": "abcdef", "area": "北区"}
+        出力: '{"area": "北区", "name": "abcdef"}'
 
     Args:
-        args: ツール呼び出しの引数（dict）。
+        args (dict): ツール呼び出しの引数。
 
     Returns:
         str: 正規化された引数の文字列表現。
@@ -60,10 +48,12 @@ def build_question_and_dialogue_maps(input_path: Path):
     `question` と `dialogue_id` のマップを作成する。
 
     Args:
-        input_path (Path): inputファイルのパス。
+        input_path (Path): JMultiWOZ-TC の入力データファイルのパス。
 
     Returns:
-        tuple: `(question_map, dialogue_map)` の2要素タプル。
+        tuple: `(data_id2question, data_id2dialogue)` の2要素タプル。
+            - data_id2question (dict): `data_id` をキー、`question` を値とする辞書。
+            - data_id2dialogue (dict): `data_id` をキー、`dialogue_id` を値とする辞書。
     """
     raise NotImplementedError()
 
@@ -85,7 +75,7 @@ def build_ground_truth_map(ground_items: list):
 
 
 
-def evaluate_results(result_data, ground_truth_map, question_map, dialogue_map):
+def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue):
     """結果比較とメトリクス集計
 
     LLM出力と正解データを比較し、各種指標(全体/使用判断/不使用判断/合算/tool call精度)を集計して返す。
@@ -93,24 +83,28 @@ def evaluate_results(result_data, ground_truth_map, question_map, dialogue_map):
 
     Args:
         result_data (list): LLM出力のレコード配列。
-        ground_truth_map (dict): `data_id` をキーにした正解ツール呼び出しのマップ。
-        question_map (dict): `data_id`→`question` のマップ。
-        dialogue_map (dict): `data_id`→`dialogue_id` のマップ。
+        data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
+        data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
+        data_id2dialogue (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
 
     Returns:
-        tuple: `(metrics, incorrect_call_precision, incorrect_use_judgement, incorrect_nouse_judgement)` の4要素のタプル。
+        tuple: `(counts, incorrect_call_precision, incorrect_use_judgement, incorrect_nouse_judgement)` の4要素のタプル。
+            - counts (dict): 各種指標のカウント値を格納した辞書。
+            - incorrect_call_precision (list): ツール呼び出し精度が誤っているケースのログ。
+            - incorrect_use_judgement (list): ツール使用判断が誤っているケースのログ。
+            - incorrect_nouse_judgement (list): ツール不使用判断が誤っているケースのログ。
     """
     raise NotImplementedError()
 
 
 
-def compute_accuracies(metrics: dict):
+def compute_accuracies(counts: dict):
     """正答率の計算
 
     集計済みメトリクスから、各指標の分母・分子に基づいて正答率(%)を計算する。
 
     Args:
-        metrics (dict): 集計済みのカウント値を格納した辞書。
+        counts (dict): 集計済みのカウント値を格納した辞書。
 
     Returns:
         dict: 各種指標(全体/ツール使用/ツール不使用/ツール使用・不使用合算/ツール呼び出し精度)の要約を格納した辞書。
@@ -119,15 +113,38 @@ def compute_accuracies(metrics: dict):
 
 
 
-def write_summary(output_path: Path, accuracies: dict, logs: tuple[list, list, list]):
+def write_summary(
+    output_path: Path,
+    accuracies: dict,
+    incorrect_call_precision: list,
+    incorrect_use_judgement: list,
+    incorrect_nouse_judgement: list,
+):
     """要約と誤答ログの書き出し
 
-    計算済みの要約(5行)と誤答ログを、従来の順序でNDJSONとして出力する。
+    計算済みの要約(5行)と誤答ログを、JSONL形式で出力する。
+    出力の順序は次の通り:
+        - 全体の要約 (1行)
+        - ツール使用判断の要約 (1行)
+        - ツール不使用判断の要約 (1行)
+        - ツール使用・不使用判断の要約 (1行)
+        - tool call精度の要約 (1行)
+        - tool call精度の誤答ログをすべて
+        - ツール使用判断の誤答ログをすべて
+        - ツール不使用判断の誤答ログをすべて
 
     Args:
         output_path (Path): 出力ファイルパス。
         accuracies (dict): 各種指標の要約を格納した辞書。
-        logs (tuple[list, list, list]): 誤答ログのタプル `(call, use, nouse)`。
+        incorrect_call_precision (list):
+            ツール呼び出し内容そのものが誤っているケースのログ
+            ("tool call精度" の誤答)。
+        incorrect_use_judgement (list):
+            本来ツールを使うべきなのに使わなかったケースのログ
+            (「ツール使用判断」の誤答)。
+        incorrect_nouse_judgement (list):
+            本来ツールを使うべきでないのに使ったケースのログ
+            (「ツール不使用判断」の誤答)。
 
     Returns:
         None: なし。
@@ -177,19 +194,19 @@ def main():
     result_data = load_jsonl(args.result)
     ground_data = load_jsonl(args.ground)
 
-    question_map, dialogue_map = build_question_and_dialogue_maps(args.input)
-    ground_truth_map = build_ground_truth_map(ground_data)
+    data_id2question, data_id2dialogue = build_question_and_dialogue_maps(args.input)
+    data_id2ground_truth = build_ground_truth_map(ground_data)
 
-    metrics, log_call, log_use, log_nouse = evaluate_results(
-        result_data, ground_truth_map, question_map, dialogue_map
+    counts, log_call, log_use, log_nouse = evaluate_results(
+        result_data, data_id2ground_truth, data_id2question, data_id2dialogue
     )
-    accuracies = compute_accuracies(metrics)
+    accuracies = compute_accuracies(counts)
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     safe_model_name = m.group(1) if m else "unknown"
     output_path = Path(f"score_{safe_model_name}.json")
 
-    write_summary(output_path, accuracies, (log_call, log_use, log_nouse))
+    write_summary(output_path, accuracies, log_call, log_use, log_nouse)
     print_summary_to_console(accuracies)
     print(f"{'='*80}")
     print(f"評価結果のJSONを書き出しました: {output_path}")
