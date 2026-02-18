@@ -136,6 +136,7 @@ def serialize_tool_calls(tool_calls) -> list:
 
     LLM出力の tool_calls を、後続処理や保存に適した辞書配列へ正規化する。
     function.arguments が文字列の場合はJSONとしてのパースを行う。
+    function が存在しない要素については、そのまま配列へ格納する。
 
     Args:
         tool_calls (list): モデル応答のツール呼び出し配列。
