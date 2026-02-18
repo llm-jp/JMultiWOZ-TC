@@ -145,7 +145,7 @@ def serialize_tool_calls(tool_calls) -> list:
     """
     serializable = []
     for tc in tool_calls:
-        # function が存在しない要素については、そのまま配列へ格納する。
+        # 関数呼び出しがある場合のみシリアライズを必要とする
         if hasattr(tc, "function"):
             args_dict = json.loads(tc.function.arguments)
             serializable.append(
