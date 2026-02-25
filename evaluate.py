@@ -170,7 +170,20 @@ def print_summary_to_console(accuracies: dict):
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    overall = accuracies["overall"]
+    used = accuracies["used"]
+    unused = accuracies["unused"]
+    use_or_nouse = accuracies["use_or_nouse"]
+    call = accuracies["call"]
+
+    print(f"\n{'='*80}")
+    print("評価結果(要約)")
+    print(f"{'='*80}")
+    print(f"全体: 総{overall['total']} / 対象{overall['evaluated']} / ミス{overall['error']} / 正答率{overall['acc']:.2f}%")
+    print(f"ツール使用判断: 総{used['total']} / 対象{used['evaluated']} / ミス{used['error']} / 正答率{used['acc']:.2f}%")
+    print(f"ツール不使用判断: 総{unused['total']} / 対象{unused['evaluated']} / ミス{unused['error']} / 正答率{unused['acc']:.2f}%")
+    print(f"ツール使用・不使用判断: 総{use_or_nouse['total']} / 対象{use_or_nouse['evaluated']} / ミス{use_or_nouse['error']} / 正答率{use_or_nouse['acc']:.2f}%")
+    print(f"tool call精度: 総{call['total']} / 対象{call['evaluated']} / ミス{call['error']} / 正答率{call['acc']:.2f}%")
 
 
 
