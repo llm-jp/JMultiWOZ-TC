@@ -71,7 +71,11 @@ def build_ground_truth_map(ground_items: list):
     Returns:
         dict: `data_id` をキー、`ground_truth`(list) を値とする辞書。
     """
-    raise NotImplementedError()
+    data_id2ground_truth = {}
+    for item in ground_items:
+        key = item.get("data_id")
+        data_id2ground_truth[key] = item.get("ground_truth", [])
+    return data_id2ground_truth
 
 
 
