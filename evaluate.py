@@ -149,7 +149,71 @@ def write_summary(
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    overall = accuracies["overall"]
+    used = accuracies["used"]
+    unused = accuracies["unused"]
+    use_or_nouse = accuracies["use_or_nouse"]
+    call = accuracies["call"]
+
+    with open(output_path, "w", encoding="utf-8") as out_f:
+        all_summary = {
+            "評価項目": "全体",
+            "総データ数": overall["total"],
+            "評価対象数": overall["evaluated"],
+            "正解数": overall["correct"],
+            "不正解数": overall["incorrect"],
+            "出力ミスのデータ数": overall["error"],
+            "全体の正答率(%)": overall["acc"],
+        }
+        used_summary = {
+            "評価項目": "ツール使用判断",
+            "総データ数": used["total"],
+            "評価対象数": used["evaluated"],
+            "正解数": used["correct"],
+            "不正解数": used["incorrect"],
+            "出力ミスのデータ数": used["error"],
+            "全体の正答率(%)": used["acc"],
+        }
+        unused_summary = {
+            "評価項目": "ツール不使用判断",
+            "総データ数": unused["total"],
+            "評価対象数": unused["evaluated"],
+            "正解数": unused["correct"],
+            "不正解数": unused["incorrect"],
+            "出力ミスのデータ数": unused["error"],
+            "全体の正答率(%)": unused["acc"],
+        }
+        use_or_nouse_summary = {
+            "評価項目": "ツール使用・不使用判断",
+            "総データ数": use_or_nouse["total"],
+            "評価対象数": use_or_nouse["evaluated"],
+            "正解数": use_or_nouse["correct"],
+            "不正解数": use_or_nouse["incorrect"],
+            "出力ミスのデータ数": use_or_nouse["error"],
+            "全体の正答率(%)": use_or_nouse["acc"],
+        }
+        call_summary = {
+            "評価項目": "tool call精度",
+            "総データ数": call["total"],
+            "評価対象数": call["evaluated"],
+            "正解数": call["correct"],
+            "不正解数": call["incorrect"],
+            "出力ミスのデータ数": call["error"],
+            "全体の正答率(%)": call["acc"],
+        }
+
+        out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(used_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(unused_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(use_or_nouse_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(call_summary, ensure_ascii=False) + "\n")
+
+        for bad in incorrect_call_precision:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
+        for bad in incorrect_use_judgement:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
+        for bad in incorrect_nouse_judgement:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
 
 
 
