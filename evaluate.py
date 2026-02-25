@@ -55,7 +55,20 @@ def build_question_and_dialogue_maps(input_path: Path):
             - data_id2question (dict): `data_id` をキー、`question` を値とする辞書。
             - data_id2dialogue (dict): `data_id` をキー、`dialogue_id` を値とする辞書。
     """
-    raise NotImplementedError()
+    data_id2question = {}
+    data_id2dialogue = {}
+    with open(input_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            obj = json.loads(line)
+            qid = obj.get("data_id")
+            if qid is not None:
+                data_id2question[qid] = obj.get("question")
+                data_id2dialogue[qid] = obj.get("dialogue_id")
+    return data_id2question, data_id2dialogue
 
 
 
