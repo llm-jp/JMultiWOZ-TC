@@ -46,15 +46,8 @@ def normalize_tool_calls(tool_calls):
             # 想定外フォーマットは無視する
             continue
 
-        if "function" in call and isinstance(call["function"], dict):
-            # generate.py が serialize_tool_calls した形式
-            fn = call["function"]
-            name = fn.get("name")
-            raw_args = fn.get("arguments")
-        else:
-            # ground_truth 側の {"name", "arguments"} 形式
-            name = call.get("name")
-            raw_args = call.get("arguments")
+        name = call.get("name")
+        raw_args = call.get("arguments")
 
         if name is None:
             # name が無いものは比較対象外
