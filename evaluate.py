@@ -98,91 +98,6 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
 
 
 
-def compute_accuracies(counts: dict):
-    """正答率の計算
-
-    集計済みメトリクスから、各指標の分母・分子に基づいて正答率(%)を計算する。
-
-    Args:
-        counts (dict): 集計済みのカウント値を格納した辞書。
-
-    Returns:
-        dict: 各種指標(全体/ツール使用/ツール不使用/ツール使用・不使用合算/ツール呼び出し精度)の要約を格納した辞書。
-    """
-    total = counts["total"]
-    overall_evaluated = total - counts["overall_error"]
-    overall_acc = (
-        (counts["overall_correct"] / overall_evaluated * 100)
-        if overall_evaluated
-        else 0.0
-    )
-
-    use_evaluated = counts["use_total"] - counts["use_error"]
-    use_acc = (counts["use_correct"] / use_evaluated * 100) if use_evaluated else 0.0
-
-    nouse_evaluated = counts["nouse_total"] - counts["nouse_error"]
-    nouse_acc = (
-        (counts["nouse_correct"] / nouse_evaluated * 100) if nouse_evaluated else 0.0
-    )
-
-    use_or_nouse_total = total
-    use_or_nouse_evaluated = use_or_nouse_total - counts["use_or_nouse_error"]
-    use_or_nouse_acc = (
-        (counts["use_or_nouse_correct"] / use_or_nouse_evaluated * 100)
-        if use_or_nouse_evaluated
-        else 0.0
-    )
-
-    call_evaluated = counts["call_total"]
-    call_acc = (
-        (counts["call_correct"] / call_evaluated * 100) if call_evaluated else 0.0
-    )
-
-    return {
-        "overall": {
-            "total": total,
-            "evaluated": overall_evaluated,
-            "correct": counts["overall_correct"],
-            "incorrect": counts["overall_incorrect"],
-            "error": counts["overall_error"],
-            "acc": round(overall_acc, 2),
-        },
-        "used": {
-            "total": counts["use_total"],
-            "evaluated": use_evaluated,
-            "correct": counts["use_correct"],
-            "incorrect": counts["use_incorrect"],
-            "error": counts["use_error"],
-            "acc": round(use_acc, 2),
-        },
-        "unused": {
-            "total": counts["nouse_total"],
-            "evaluated": nouse_evaluated,
-            "correct": counts["nouse_correct"],
-            "incorrect": counts["nouse_incorrect"],
-            "error": counts["nouse_error"],
-            "acc": round(nouse_acc, 2),
-        },
-        "use_or_nouse": {
-            "total": use_or_nouse_total,
-            "evaluated": use_or_nouse_evaluated,
-            "correct": counts["use_or_nouse_correct"],
-            "incorrect": counts["use_or_nouse_incorrect"],
-            "error": counts["use_or_nouse_error"],
-            "acc": round(use_or_nouse_acc, 2),
-        },
-        "call": {
-            "total": counts["call_total"],
-            "evaluated": call_evaluated,
-            "correct": counts["call_correct"],
-            "incorrect": counts["call_incorrect"],
-            "error": 0,
-            "acc": round(call_acc, 2),
-        },
-    }
-
-
-
 def write_summary(
     output_path: Path,
     accuracies: dict,
@@ -273,10 +188,9 @@ def main():
     data_id2question, data_id2dialogue = build_question_and_dialogue_maps(args.input)
     data_id2ground_truth = build_ground_truth_map(ground_data)
 
-    counts, log_call, log_use, log_nouse = evaluate_results(
+    accuracies, log_call, log_use, log_nouse = evaluate_results(
         result_data, data_id2ground_truth, data_id2question, data_id2dialogue
     )
-    accuracies = compute_accuracies(counts)
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     safe_model_name = m.group(1) if m else "unknown"
