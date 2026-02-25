@@ -94,7 +94,155 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
             - incorrect_use_judgement (list): ツール使用判断が誤っているケースのログ。
             - incorrect_nouse_judgement (list): ツール不使用判断が誤っているケースのログ。
     """
-    raise NotImplementedError()
+    total = len(result_data)
+
+    overall_error = 0
+    overall_correct = 0
+    overall_incorrect = 0
+
+    use_total = 0
+    use_error = 0
+    use_correct = 0
+    use_incorrect = 0
+
+    nouse_total = 0
+    nouse_error = 0
+    nouse_correct = 0
+    nouse_incorrect = 0
+
+    use_or_nouse_error = 0
+    use_or_nouse_correct = 0
+    use_or_nouse_incorrect = 0
+
+    call_total = 0
+    call_correct = 0
+    call_incorrect = 0
+
+    incorrect_call_precision = []
+    incorrect_use_judgement = []
+    incorrect_nouse_judgement = []
+
+    print(f"評価開始: {total}件のデータを処理します\n")
+
+    for idx, rec in enumerate(result_data, 1):
+        data_id = rec.get("data_id")
+        predicted_calls = rec.get("tool_calls", [])
+        gold = data_id2ground_truth.get(data_id, [])
+        dlg_id = rec.get("dialogue_id") or data_id2dialogue.get(data_id)
+
+        print(f"[{idx}/{total}] ID: {data_id}")
+
+        if rec.get("error"):
+            overall_error += 1
+            if gold:
+                use_total += 1
+                use_error += 1
+            else:
+                nouse_total += 1
+                nouse_error += 1
+            use_or_nouse_error += 1
+            case_label = "ツール使用時" if gold else "ツール不使用時"
+            print(f"• 出力ミス({case_label}): {rec['error']}")
+            print("-" * 80)
+            continue
+
+        predicted = normalize_tool_calls(predicted_calls)
+        expected = normalize_tool_calls(gold)
+
+        gold_used = bool(gold)
+        pred_used = bool(predicted)
+
+        if predicted == expected:
+            overall_correct += 1
+            print("✓ 正解(全体: 厳密一致)")
+        else:
+            overall_incorrect += 1
+            print("✗ 不正解(全体: 厳密不一致)")
+
+        if gold_used:
+            use_total += 1
+            if pred_used:
+                use_correct += 1
+            else:
+                use_incorrect += 1
+                incorrect_use_judgement.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "Incorrect_genre": "ツール使用判断",
+                        "question": data_id2question.get(data_id),
+                        "output": rec.get("tool_calls"),
+                        "ground_truth": gold,
+                    }
+                )
+        else:
+            nouse_total += 1
+            if not pred_used:
+                nouse_correct += 1
+            else:
+                nouse_incorrect += 1
+                incorrect_nouse_judgement.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "Incorrect_genre": "ツール不使用判断",
+                        "question": data_id2question.get(data_id),
+                        "output": rec.get("tool_calls"),
+                        "ground_truth": gold,
+                    }
+                )
+
+        if gold_used == pred_used:
+            use_or_nouse_correct += 1
+        else:
+            use_or_nouse_incorrect += 1
+
+        if gold_used:
+            call_total += 1
+            if predicted == expected:
+                call_correct += 1
+            else:
+                call_incorrect += 1
+                incorrect_call_precision.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "Incorrect_genre": "tool call精度",
+                        "question": data_id2question.get(data_id),
+                        "output": rec.get("tool_calls"),
+                        "ground_truth": gold,
+                    }
+                )
+
+        print("-" * 80)
+
+    counts = {
+        "total": total,
+        "overall_error": overall_error,
+        "overall_correct": overall_correct,
+        "overall_incorrect": overall_incorrect,
+        "use_total": use_total,
+        "use_error": use_error,
+        "use_correct": use_correct,
+        "use_incorrect": use_incorrect,
+        "nouse_total": nouse_total,
+        "nouse_error": nouse_error,
+        "nouse_correct": nouse_correct,
+        "nouse_incorrect": nouse_incorrect,
+        "use_or_nouse_error": use_or_nouse_error,
+        "use_or_nouse_correct": use_or_nouse_correct,
+        "use_or_nouse_incorrect": use_or_nouse_incorrect,
+        "call_total": call_total,
+        "call_correct": call_correct,
+        "call_incorrect": call_incorrect,
+    }
+
+    return (
+        counts,
+        incorrect_call_precision,
+        incorrect_use_judgement,
+        incorrect_nouse_judgement,
+    )
 
 
 
