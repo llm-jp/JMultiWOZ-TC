@@ -1,3 +1,4 @@
+import json
 import argparse
 import re
 from pathlib import Path
@@ -22,7 +23,7 @@ def canonicalize_arguments(args: dict):
     Returns:
         str: 正規化された引数の文字列表現。
     """
-    raise NotImplementedError()
+    return json.dumps(args, sort_keys=True, ensure_ascii=False)
 
 
 
