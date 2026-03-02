@@ -38,7 +38,26 @@ def normalize_tool_calls(tool_calls):
     Returns:
         set: `(name, canonical_args_str)` の集合。
     """
-    raise NotImplementedError()
+    if not tool_calls:
+        return set()
+
+    normalized = []
+    for call in tool_calls:
+        if not isinstance(call, dict):
+            # 想定外フォーマットは無視する
+            continue
+
+        name = call.get("name")
+        raw_args = call.get("arguments")
+
+        if name is None:
+            # name が無いものは比較対象外
+            continue
+
+        args_canonical = canonicalize_arguments(raw_args)
+        normalized.append((name, args_canonical))
+
+    return set(normalized)
 
 
 
