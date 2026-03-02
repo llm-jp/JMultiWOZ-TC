@@ -75,114 +75,101 @@ def build_ground_truth_map(ground_items: list):
 
 
 
-def compute_accuracy_percentage(correct: int, evaluated: int):
-    """正答率の計算
+def aggregate_overall_metrics(result_data, data_id2ground_truth):
+    """全体評価の集計
 
-    正答数と評価対象数から正答率(%)を計算する。
+    全レコードを走査し、モデル出力の tool call 集合と正解の tool call 集合が
+    厳密一致しているかを判定して、全体指標を集計する。
+    `error` が入っているレコードは評価対象外として `error` に加算する。
 
     Args:
-        correct (int): 正答数。
-        evaluated (int): 評価対象数。
+        result_data (list): LLM出力のレコード配列。
+        data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
 
     Returns:
-        float: 正答率(%)。
+        dict: 全体評価の集計結果。
+            - total (int): 総データ件数。
+            - correct (int): 厳密一致した件数。
+            - incorrect (int): 厳密不一致の件数。
+            - error (int): 出力ミス等により未評価となった件数。
     """
     raise NotImplementedError()
 
 
+def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,):
+    """ツール使用/不使用判断の集計
 
-def evaluate_overall_match(
-    output_calls_set: set,
-    ground_truth_set: set,
-) -> tuple[bool, bool]:
-    """全体の厳密一致判定
+    全レコードを走査し、
+    - 正解がツール使用ケース (`ground_truth` が非空)
+    - 正解がツール不使用ケース (`ground_truth` が空)
+    を分けて、判断の正誤を集計する。
 
-    ツール呼び出しの出力データと正解データが完全に一致するかを判定する。
-
-    Args:
-        output_calls_set (set): 正規化された出力ツール呼び出しの集合。
-        ground_truth_set (set): 正規化された正解ツール呼び出しの集合。
-
-    Returns:
-        correct: 出力と正解が一致したか。
-    """
-    raise NotImplementedError()
-
-
-
-def evaluate_tool_usage_judgement(
-    output_has_calls: bool,
-    ground_truth_has_calls: bool,
-    data_id: str,
-    dlg_id: str,
-    data_id2question: dict,
-    output_calls: list,
-    ground_truth_calls: list,
-) -> dict:
-    """ツール使用/不使用判断の評価
-
-    正解がツール使用か不使用かに応じて、判断が正しいかを判定する。
-    不正解の場合はログを返す。
-
-    Args:
-        output_has_calls (bool): 出力にツール呼び出しが含まれているか。
-        ground_truth_has_calls (bool): 正解にツール呼び出しが含まれているか。
-        data_id (str): データID。
-        dlg_id (str): ダイアログID。
-        data_id2question (dict): data_id to question のマップ。
-        output_calls (list): 出力ツール呼び出しのリスト。
-        ground_truth_calls (list): 正解ツール呼び出しのリスト。
-
-    Returns:
-        dict: {"correct": bool, "incorrect_log": dict or None}。
-    """
-    raise NotImplementedError()
-
-
-
-def evaluate_tool_calls_accuracy(
-    output_calls_set: set,
-    ground_truth_set: set,
-    ground_truth_has_calls: bool,
-    data_id: str,
-    dlg_id: str,
-    data_id2question: dict,
-    output_calls: list,
-    ground_truth_calls: list,
-) -> dict:
-    """ツール呼び出し精度の評価
-
-    ツール呼び出しの内容が正しいかを判定し、不正解の場合はログを返す。
-    ツールを使用すべき場合のみ評価対象とする。
-
-    Args:
-        output_calls_set (set): 正規化された出力ツール呼び出しの集合。
-        ground_truth_set (set): 正規化された正解ツール呼び出しの集合。
-        ground_truth_has_calls (bool): 正解にツール呼び出しが含まれているか。
-        data_id (str): データID。
-        dlg_id (str): ダイアログID。
-        data_id2question (dict): data_id to question のマップ。
-        output_calls (list): 出力ツール呼び出しのリスト。
-        ground_truth_calls (list): 正解ツール呼び出しのリスト。
-
-    Returns:
-        dict: {"evaluated": bool, "correct": bool, "incorrect_log": dict or None}。
-    """
-    raise NotImplementedError()
-
-
-
-def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue):
-    """結果比較とメトリクス集計
-
-    LLM出力と正解データを比較し、各種指標(全体/使用判断/不使用判断/合算/tool call精度)ごとに正答率を計算し返す。
-    出力ミス(TimeoutError など)は別扱いでカウントする。
+    不正解ケースは用途別にログへ保存する。
+    `error` レコードは、正解側の使用/不使用に応じて `error` のみ加算する。
 
     Args:
         result_data (list): LLM出力のレコード配列。
         data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
         data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
-        data_id2dialogue (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
+        data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
+
+    Returns:
+        tuple: `(use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement)`
+            の4要素タプル。
+            - use_stats (dict): ツール使用判断の集計結果
+              (`total`, `correct`, `incorrect`, `error`)。
+            - nouse_stats (dict): ツール不使用判断の集計結果
+              (`total`, `correct`, `incorrect`, `error`)。
+            - incorrect_use_judgement (list):
+              本来ツールを使用するケースの誤答ログ配列。
+            - incorrect_nouse_judgement (list):
+              本来ツールを使用しないケースの誤答ログ配列。
+    """
+    raise NotImplementedError()
+
+
+def aggregate_tool_call_metrics(
+    result_data,
+    data_id2ground_truth,
+    data_id2question,
+    data_id2dialogue_id,
+):
+    """tool call精度の集計
+
+    全レコードを走査し、正解がツールを使用するケース (`ground_truth` が非空) に限定して
+    tool call 内容の厳密一致精度を集計する。
+    判定は、関数名と正規化引数文字列の集合一致で行う。
+    不一致ケースは誤答ログに保存する。
+    対象ケースで `error` がある場合は `error` のみ加算して未評価とする。
+
+    Args:
+        result_data (list): LLM出力のレコード配列。
+        data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
+        data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
+        data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
+
+    Returns:
+        tuple: `(call_stats, incorrect_call_precision)` の2要素タプル。
+            - call_stats (dict): tool call 精度の集計結果
+              (`total`, `correct`, `incorrect`, `error`)。
+            - incorrect_call_precision (list):
+              tool call 精度が不一致だったケースの誤答ログ配列。
+    """
+    raise NotImplementedError()
+
+
+def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id):
+    """結果比較とメトリクス集計
+
+    LLM出力と正解データを比較し、各種指標(全体/使用判断/不使用判断/合算/tool call精度)を集計して返す。
+    出力ミス(TimeoutError など)は別扱いでカウントする。
+    同時に正答率も計算して返す。
+
+    Args:
+        result_data (list): LLM出力のレコード配列。
+        data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
+        data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
+        data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
 
     Returns:
         tuple: `(accuracies, incorrect_call_precision, incorrect_use_judgement, incorrect_nouse_judgement)` の4要素のタプル。
@@ -192,167 +179,83 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
             - incorrect_nouse_judgement (list): ツール不使用判断が誤っているケースのログ。
     """
     total = len(result_data)
-
-    overall_error = 0
-    overall_correct = 0
-    overall_incorrect = 0
-
-    use_total = 0
-    use_error = 0
-    use_correct = 0
-    use_incorrect = 0
-
-    nouse_total = 0
-    nouse_error = 0
-    nouse_correct = 0
-    nouse_incorrect = 0
-
-    use_or_nouse_error = 0
-    use_or_nouse_correct = 0
-    use_or_nouse_incorrect = 0
-
-    call_total = 0
-    call_correct = 0
-    call_incorrect = 0
-
-    incorrect_call_precision = []
-    incorrect_use_judgement = []
-    incorrect_nouse_judgement = []
-
     print(f"評価開始: {total}件のデータを処理します\n")
 
-    for idx, rec in enumerate(result_data, 1):
-        data_id = rec.get("data_id")
-        output_calls = rec.get("tool_calls", [])
-        ground_truth_calls = data_id2ground_truth.get(data_id, [])
-        dlg_id = rec.get("dialogue_id") or data_id2dialogue.get(data_id)
+    overall_stats = aggregate_overall_metrics(result_data, data_id2ground_truth)
 
-        print(f"[{idx}/{total}] ID: {data_id}")
+    (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id)
 
-        if rec.get("error"):
-            overall_error += 1
-            if ground_truth_calls:
-                use_total += 1
-                use_error += 1
-            else:
-                nouse_total += 1
-                nouse_error += 1
-            use_or_nouse_error += 1
-            case_label = "ツール使用時" if ground_truth_calls else "ツール不使用時"
-            print(f"• 出力ミス({case_label}): {rec['error']}")
-            print("-" * 80)
-            continue
+    use_or_nouse_stats = {
+            "total": use_stats["total"] + nouse_stats["total"],
+            "correct": use_stats["correct"] + nouse_stats["correct"],
+            "incorrect": use_stats["incorrect"] + nouse_stats["incorrect"],
+            "error": use_stats["error"] + nouse_stats["error"],
+        }
 
-        output_calls_set = normalize_tool_calls(output_calls)
-        ground_truth_set = normalize_tool_calls(ground_truth_calls)
-
-        ground_truth_used = bool(ground_truth_calls)
-        output_used = bool(output_calls_set)
-
-        # 全体評価
-        overall_is_correct = evaluate_overall_match(output_calls_set, ground_truth_set)
-        if overall_is_correct:
-            overall_correct += 1
-            print("✓ 正解(全体: 厳密一致)")
-        else:
-            overall_incorrect += 1
-            print("✗ 不正解(全体: 厳密不一致)")
-
-        # ツール使用/不使用判断評価
-        judgement_result = evaluate_tool_usage_judgement(
-            output_used, ground_truth_used, data_id, dlg_id, data_id2question,
-            output_calls, ground_truth_calls
-        )
-        if ground_truth_used:
-            use_total += 1
-            if judgement_result["correct"]:
-                use_correct += 1
-            else:
-                use_incorrect += 1
-                incorrect_use_judgement.append(judgement_result["incorrect_log"])
-        else:
-            nouse_total += 1
-            if judgement_result["correct"]:
-                nouse_correct += 1
-            else:
-                nouse_incorrect += 1
-                incorrect_nouse_judgement.append(judgement_result["incorrect_log"])
-
-        # ツール使用・不使用合算評価
-        if ground_truth_used == output_used:
-            use_or_nouse_correct += 1
-        else:
-            use_or_nouse_incorrect += 1
-
-        # ツール呼び出し精度評価
-        call_result = evaluate_tool_calls_accuracy(
-            output_calls_set, ground_truth_set, ground_truth_used, data_id, dlg_id, data_id2question,
-            output_calls, ground_truth_calls
-        )
-        if call_result["evaluated"]:
-            call_total += 1
-            if call_result["correct"]:
-                call_correct += 1
-            else:
-                call_incorrect += 1
-                incorrect_call_precision.append(call_result["incorrect_log"])
-
-        print("-" * 80)
+    call_stats, incorrect_call_precision = aggregate_tool_call_metrics(
+        result_data,
+        data_id2ground_truth,
+        data_id2question,
+        data_id2dialogue_id,
+    )
 
     # 正答率の計算
-    overall_evaluated = total - overall_error
-    overall_acc = round(compute_accuracy_percentage(overall_correct, overall_evaluated), 2)
+    overall_evaluated = overall_stats["total"] - overall_stats["error"]
+    overall_acc = overall_stats["correct"] / overall_evaluated * 100 if overall_evaluated > 0 else 0
 
-    use_evaluated = use_total - use_error
-    use_acc = round(compute_accuracy_percentage(use_correct, use_evaluated), 2)
+    use_evaluated = use_stats["total"] - use_stats["error"]
+    use_acc = use_stats["correct"] / use_evaluated * 100 if use_evaluated > 0 else 0
 
-    nouse_evaluated = nouse_total - nouse_error
-    nouse_acc = round(compute_accuracy_percentage(nouse_correct, nouse_evaluated), 2)
+    nouse_evaluated = nouse_stats["total"] - nouse_stats["error"]
+    nouse_acc = nouse_stats["correct"] / nouse_evaluated * 100 if nouse_evaluated > 0 else 0
 
-    use_or_nouse_evaluated = total - use_or_nouse_error
-    use_or_nouse_acc = round(compute_accuracy_percentage(use_or_nouse_correct, use_or_nouse_evaluated), 2)
+    use_or_nouse_evaluated = use_or_nouse_stats["total"] - use_or_nouse_stats["error"]
+    use_or_nouse_acc = (
+        use_or_nouse_stats["correct"] / use_or_nouse_evaluated * 100 if use_or_nouse_evaluated > 0 else 0
+    )
 
-    call_evaluated = call_total
-    call_acc = round(compute_accuracy_percentage(call_correct, call_evaluated), 2)
+    call_evaluated = call_stats["total"] - call_stats["error"]
+    call_acc = call_stats["correct"] / call_evaluated * 100 if call_evaluated > 0 else 0
 
     accuracies = {
         "overall": {
-            "total": total,
+            "total": overall_stats["total"],
             "evaluated": overall_evaluated,
-            "correct": overall_correct,
-            "incorrect": overall_incorrect,
-            "error": overall_error,
+            "correct": overall_stats["correct"],
+            "incorrect": overall_stats["incorrect"],
+            "error": overall_stats["error"],
             "acc": overall_acc,
         },
         "used": {
-            "total": use_total,
+            "total": use_stats["total"],
             "evaluated": use_evaluated,
-            "correct": use_correct,
-            "incorrect": use_incorrect,
-            "error": use_error,
+            "correct": use_stats["correct"],
+            "incorrect": use_stats["incorrect"],
+            "error": use_stats["error"],
             "acc": use_acc,
         },
         "unused": {
-            "total": nouse_total,
+            "total": nouse_stats["total"],
             "evaluated": nouse_evaluated,
-            "correct": nouse_correct,
-            "incorrect": nouse_incorrect,
-            "error": nouse_error,
+            "correct": nouse_stats["correct"],
+            "incorrect": nouse_stats["incorrect"],
+            "error": nouse_stats["error"],
             "acc": nouse_acc,
         },
         "use_or_nouse": {
-            "total": total,
+            "total": use_or_nouse_stats["total"],
             "evaluated": use_or_nouse_evaluated,
-            "correct": use_or_nouse_correct,
-            "incorrect": use_or_nouse_incorrect,
-            "error": use_or_nouse_error,
+            "correct": use_or_nouse_stats["correct"],
+            "incorrect": use_or_nouse_stats["incorrect"],
+            "error": use_or_nouse_stats["error"],
             "acc": use_or_nouse_acc,
         },
         "call": {
-            "total": call_total,
+            "total": call_stats["total"],
             "evaluated": call_evaluated,
-            "correct": call_correct,
-            "incorrect": call_incorrect,
+            "correct": call_stats["correct"],
+            "incorrect": call_stats["incorrect"],
+            "error": call_stats["error"],
             "acc": call_acc,
         },
     }
