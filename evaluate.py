@@ -186,7 +186,12 @@ def write_summary(
             "出力ミスのデータ数": call["error"],
             "全体の正答率(%)": call["acc"],
         }
-
+        
+        out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(used_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(unused_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(use_or_nouse_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(call_summary, ensure_ascii=False) + "\n")
 
 
 def write_incorrect_logs(
@@ -219,12 +224,6 @@ def write_incorrect_logs(
         None: なし。
     """
     with open(output_path, "w", encoding="utf-8") as out_f:
-        out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
-        out_f.write(json.dumps(used_summary, ensure_ascii=False) + "\n")
-        out_f.write(json.dumps(unused_summary, ensure_ascii=False) + "\n")
-        out_f.write(json.dumps(use_or_nouse_summary, ensure_ascii=False) + "\n")
-        out_f.write(json.dumps(call_summary, ensure_ascii=False) + "\n")
-
         for bad in incorrect_call_precision:
             out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
         for bad in incorrect_use_judgement:
