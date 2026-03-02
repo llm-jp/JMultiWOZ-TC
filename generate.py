@@ -1,7 +1,9 @@
 import json
-from pathlib import Path
 import argparse
-from openai import OpenAI
+import httpx
+import time
+from pathlib import Path
+from openai import OpenAI, APITimeoutError
 
 
 def load_tools(file_path):
@@ -95,7 +97,7 @@ def output_with_retries(
     model_name: str,
     messages,
     tools,
-    max_retries: int = 3,
+    max_retries: int,
 ):
     """LLM出力の実行
 
@@ -107,28 +109,58 @@ def output_with_retries(
         model_name (str): 使用するモデル名。
         messages (list[dict]): Chat Completions用のメッセージ配列。
         tools (list): ツール定義。
-        max_retries (int): 再試行の最大回数。既定は `3`。
+        max_retries (int): 再試行の最大回数。
 
     Returns:
-        tuple: (response, error) を返す。成功時は (response, None)、
-        タイムアウトで全失敗時は (None, "TimeoutError")。
+        tuple: (response, error) を返す。
+        成功時は (response, None)、タイムアウトで失敗時は (None, "TimeoutError")。
     """
-    raise NotImplementedError()
+    error = None
+    response = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+            break
+        except (APITimeoutError, httpx.ReadTimeout) as e:
+            print(f"[Timeout] {attempt}/{max_retries}: {e}")
+            if attempt == max_retries:
+                error = "TimeoutError"
+            time.sleep(2)
+        except Exception as e:
+            print(f"[Error] LLM実行中にエラーが発生しました: {e}")
+            error = f"Exception: {e}"
+            break
+    return response, error
 
 
-def build_timeout_record(data_id: str, dialogue_id: str) -> dict:
-    """タイムアウト時のレコード作成
+def build_error_record(data_id: str, dialogue_id: str, error: str) -> dict:
+    """エラー時のレコード作成
 
-    API呼び出しがタイムアウトした場合に出力するレコード(dict)を生成する。
+    API呼び出しがエラーした場合に出力するレコード(dict)を生成する。
 
     Args:
         data_id (str): 入力データのID。
         dialogue_id (str): 対応するダイアログID。
+        error (str): エラー内容。
 
     Returns:
-        dict: タイムアウトエラー内容を含むレコード。
+        dict: エラー内容を含むレコード。
     """
-    raise NotImplementedError()
+    if error == "TimeoutError":
+        print("✗ タイムアウトエラーで評価できませんでした。")
+    else:
+        print(f"✗ エラーで評価できませんでした: {error}")
+    return {
+        "data_id": data_id,
+        "dialogue_id": dialogue_id,
+        "tool_calls": [],
+        "error": error,
+    }
 
 
 def serialize_tool_calls(tool_calls) -> list:
@@ -170,7 +202,20 @@ def log_tool_calls(serializable_tool_calls: list):
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    print(f"  ツール呼び出し件数: {len(serializable_tool_calls)}")
+    if serializable_tool_calls:
+        for i, call in enumerate(serializable_tool_calls, 1):
+            fn = call.get("function", {})
+            name = fn.get("name")
+            args = fn.get("arguments")
+            try:
+                args_str = json.dumps(args, ensure_ascii=False)
+            except Exception:
+                args_str = str(args)
+            print(f"    [{i}] name: {name}")
+            print(f"        arguments: {args_str}")
+    else:
+        print("    ツール呼び出しなし")
 
 
 def build_success_record(
@@ -190,7 +235,11 @@ def build_success_record(
     Returns:
         dict: 成功時の出力レコード。
     """
-    raise NotImplementedError()
+    return {
+        "data_id": data_id,
+        "dialogue_id": dialogue_id,
+        "tool_calls": serializable_tool_calls,
+    }
 
 
 def append_jsonl_record(path: Path, record: dict):
@@ -205,7 +254,8 @@ def append_jsonl_record(path: Path, record: dict):
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    with open(path, "a", encoding="utf-8") as out_f:
+        out_f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def process_item(
@@ -214,6 +264,7 @@ def process_item(
     client,
     model_name: str,
     output_path: Path,
+    max_retries: int,
 ):
     """1レコードを処理して出力まで行う
 
@@ -225,6 +276,7 @@ def process_item(
         client (OpenAI): 使用する OpenAI クライアントインスタンス。
         model_name (str): 使用するモデル名。
         output_path (Path): 出力JSONLのパス。
+        max_retries (int): タイムアウト時の最大再試行回数。
 
     Returns:
         None: なし。
@@ -233,10 +285,12 @@ def process_item(
     dialogue_id = item.get("dialogue_id")
     messages = item["question"]
 
-    response, error = output_with_retries(client, model_name, messages, tools)
+    response, error = output_with_retries(
+        client, model_name, messages, tools, max_retries
+    )
 
-    if error == "TimeoutError":
-        llm_rec = build_timeout_record(data_id, dialogue_id)
+    if error is not None:
+        llm_rec = build_error_record(data_id, dialogue_id, error)
         append_jsonl_record(output_path, llm_rec)
         print("-" * 80)
         return
@@ -291,6 +345,12 @@ def main():
         default=".",
         help="出力ファイルを保存するディレクトリを指定",
     )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="タイムアウト時の最大再試行回数を指定",
+    )
 
     args = parser.parse_args()
 
@@ -321,6 +381,7 @@ def main():
             client,
             model_name,
             output_path,
+            args.max_retries,
         )
 
     print(f"出力結果のJSONLを書き出しました: {output_path}\n")
