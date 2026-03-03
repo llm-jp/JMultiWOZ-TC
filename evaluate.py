@@ -135,21 +135,6 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
 
 
 
-def compute_accuracies(counts: dict):
-    """正答率の計算
-
-    集計済みメトリクスから、各指標の分母・分子に基づいて正答率(%)を計算する。
-
-    Args:
-        counts (dict): 集計済みのカウント値を格納した辞書。
-
-    Returns:
-        dict: 各種指標(全体/ツール使用/ツール不使用/ツール使用・不使用合算/ツール呼び出し精度)の要約を格納した辞書。
-    """
-    raise NotImplementedError()
-
-
-
 def write_summary(
     output_path: Path,
     accuracies: dict,
@@ -333,10 +318,9 @@ def main():
     data_id2question, data_id2dialogue_id = build_question_and_dialogue_maps(args.input)
     data_id2ground_truth = build_ground_truth_map(ground_data)
 
-    counts, log_call, log_use, log_nouse = evaluate_results(
-        result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
+    accuracies, log_call, log_use, log_nouse = evaluate_results(
+        result_data, data_id2ground_truth, data_id2question, data_id2dialogue
     )
-    accuracies = compute_accuracies(counts)
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     safe_model_name = m.group(1) if m else "unknown"
