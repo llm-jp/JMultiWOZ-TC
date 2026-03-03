@@ -71,11 +71,24 @@ def build_question_and_dialogue_maps(input_path: Path):
         input_path (Path): JMultiWOZ-TC の入力データファイルのパス。
 
     Returns:
-        tuple: `(data_id2question, data_id2dialogue)` の2要素タプル。
+        tuple: `(data_id2question, data_id2dialogue_id)` の2要素タプル。
             - data_id2question (dict): `data_id` をキー、`question` を値とする辞書。
-            - data_id2dialogue (dict): `data_id` をキー、`dialogue_id` を値とする辞書。
+            - data_id2dialogue_id (dict): `data_id` をキー、`dialogue_id` を値とする辞書。
     """
-    raise NotImplementedError()
+    data_id2question = {}
+    data_id2dialogue_id = {}
+    with open(input_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            obj = json.loads(line)
+            qid = obj.get("data_id")
+            if qid is not None:
+                data_id2question[qid] = obj.get("question")
+                data_id2dialogue_id[qid] = obj.get("dialogue_id")
+    return data_id2question, data_id2dialogue_id
 
 
 
@@ -317,11 +330,11 @@ def main():
     result_data = load_jsonl(args.result)
     ground_data = load_jsonl(args.ground)
 
-    data_id2question, data_id2dialogue = build_question_and_dialogue_maps(args.input)
+    data_id2question, data_id2dialogue_id = build_question_and_dialogue_maps(args.input)
     data_id2ground_truth = build_ground_truth_map(ground_data)
 
     counts, log_call, log_use, log_nouse = evaluate_results(
-        result_data, data_id2ground_truth, data_id2question, data_id2dialogue
+        result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
     )
     accuracies = compute_accuracies(counts)
 
