@@ -182,11 +182,8 @@ def serialize_tool_calls(tool_calls) -> list:
             args_dict = json.loads(tc.function.arguments)
             serializable.append(
                 {
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": args_dict,
-                    },
+                    "name": tc.function.name,
+                    "arguments": args_dict,
                 }
             )
         else:
