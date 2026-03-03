@@ -182,11 +182,8 @@ def serialize_tool_calls(tool_calls) -> list:
             args_dict = json.loads(tc.function.arguments)
             serializable.append(
                 {
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": args_dict,
-                    },
+                    "name": tc.function.name,
+                    "arguments": args_dict,
                 }
             )
         else:
@@ -208,9 +205,8 @@ def log_tool_calls(serializable_tool_calls: list):
     print(f"  ツール呼び出し件数: {len(serializable_tool_calls)}")
     if serializable_tool_calls:
         for i, call in enumerate(serializable_tool_calls, 1):
-            fn = call.get("function", {})
-            name = fn.get("name")
-            args = fn.get("arguments")
+            name = call.get("name")
+            args = call.get("arguments")
             try:
                 args_str = json.dumps(args, ensure_ascii=False)
             except Exception:
