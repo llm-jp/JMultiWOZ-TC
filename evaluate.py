@@ -89,9 +89,11 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
     Returns:
         dict: 全体評価の集計結果。
             - total (int): 総データ件数。
+            - evaluated (int): 評価対象件数 (total - error)。
             - correct (int): 厳密一致した件数。
             - incorrect (int): 厳密不一致の件数。
             - error (int): 出力ミス等により未評価となった件数。
+            - acc (float): 正答率(%)。
     """
     raise NotImplementedError()
 
@@ -117,9 +119,9 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
         tuple: `(use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement)`
             の4要素タプル。
             - use_stats (dict): ツール使用判断の集計結果
-              (`total`, `correct`, `incorrect`, `error`)。
+              (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
             - nouse_stats (dict): ツール不使用判断の集計結果
-              (`total`, `correct`, `incorrect`, `error`)。
+              (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
             - incorrect_use_judgement (list):
               本来ツールを使用するケースの誤答ログ配列。
             - incorrect_nouse_judgement (list):
@@ -151,7 +153,7 @@ def aggregate_tool_call_metrics(
     Returns:
         tuple: `(call_stats, incorrect_call_precision)` の2要素タプル。
             - call_stats (dict): tool call 精度の集計結果
-              (`total`, `correct`, `incorrect`, `error`)。
+              (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
     """
@@ -183,14 +185,24 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
 
     overall_stats = aggregate_overall_metrics(result_data, data_id2ground_truth)
 
-    (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id)
+    (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement,) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,)
+
+    # use_stats と nouse_stats を統合して use_or_nouse_stats を計算
+    use_or_nouse_total = use_stats["total"] + nouse_stats["total"]
+    use_or_nouse_error = use_stats["error"] + nouse_stats["error"]
+    use_or_nouse_correct = use_stats["correct"] + nouse_stats["correct"]
+    use_or_nouse_incorrect = use_stats["incorrect"] + nouse_stats["incorrect"]
+    use_or_nouse_evaluated = use_or_nouse_total - use_or_nouse_error
+    use_or_nouse_acc = use_or_nouse_correct / use_or_nouse_evaluated * 100 if use_or_nouse_evaluated > 0 else 0
 
     use_or_nouse_stats = {
-            "total": use_stats["total"] + nouse_stats["total"],
-            "correct": use_stats["correct"] + nouse_stats["correct"],
-            "incorrect": use_stats["incorrect"] + nouse_stats["incorrect"],
-            "error": use_stats["error"] + nouse_stats["error"],
-        }
+        "total": use_or_nouse_total,
+        "evaluated": use_or_nouse_evaluated,
+        "correct": use_or_nouse_correct,
+        "incorrect": use_or_nouse_incorrect,
+        "error": use_or_nouse_error,
+        "acc": use_or_nouse_acc,
+    }
 
     call_stats, incorrect_call_precision = aggregate_tool_call_metrics(
         result_data,
@@ -199,65 +211,12 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
         data_id2dialogue_id,
     )
 
-    # 正答率の計算
-    overall_evaluated = overall_stats["total"] - overall_stats["error"]
-    overall_acc = overall_stats["correct"] / overall_evaluated * 100 if overall_evaluated > 0 else 0
-
-    use_evaluated = use_stats["total"] - use_stats["error"]
-    use_acc = use_stats["correct"] / use_evaluated * 100 if use_evaluated > 0 else 0
-
-    nouse_evaluated = nouse_stats["total"] - nouse_stats["error"]
-    nouse_acc = nouse_stats["correct"] / nouse_evaluated * 100 if nouse_evaluated > 0 else 0
-
-    use_or_nouse_evaluated = use_or_nouse_stats["total"] - use_or_nouse_stats["error"]
-    use_or_nouse_acc = (
-        use_or_nouse_stats["correct"] / use_or_nouse_evaluated * 100 if use_or_nouse_evaluated > 0 else 0
-    )
-
-    call_evaluated = call_stats["total"] - call_stats["error"]
-    call_acc = call_stats["correct"] / call_evaluated * 100 if call_evaluated > 0 else 0
-
     accuracies = {
-        "overall": {
-            "total": overall_stats["total"],
-            "evaluated": overall_evaluated,
-            "correct": overall_stats["correct"],
-            "incorrect": overall_stats["incorrect"],
-            "error": overall_stats["error"],
-            "acc": overall_acc,
-        },
-        "used": {
-            "total": use_stats["total"],
-            "evaluated": use_evaluated,
-            "correct": use_stats["correct"],
-            "incorrect": use_stats["incorrect"],
-            "error": use_stats["error"],
-            "acc": use_acc,
-        },
-        "unused": {
-            "total": nouse_stats["total"],
-            "evaluated": nouse_evaluated,
-            "correct": nouse_stats["correct"],
-            "incorrect": nouse_stats["incorrect"],
-            "error": nouse_stats["error"],
-            "acc": nouse_acc,
-        },
-        "use_or_nouse": {
-            "total": use_or_nouse_stats["total"],
-            "evaluated": use_or_nouse_evaluated,
-            "correct": use_or_nouse_stats["correct"],
-            "incorrect": use_or_nouse_stats["incorrect"],
-            "error": use_or_nouse_stats["error"],
-            "acc": use_or_nouse_acc,
-        },
-        "call": {
-            "total": call_stats["total"],
-            "evaluated": call_evaluated,
-            "correct": call_stats["correct"],
-            "incorrect": call_stats["incorrect"],
-            "error": call_stats["error"],
-            "acc": call_acc,
-        },
+        "overall": overall_stats,
+        "used": use_stats,
+        "unused": nouse_stats,
+        "use_or_nouse": use_or_nouse_stats,
+        "call": call_stats,
     }
 
     return (
@@ -371,13 +330,12 @@ def main():
     result_data = load_jsonl(args.result)
     ground_data = load_jsonl(args.ground)
 
-    data_id2question, data_id2dialogue = build_question_and_dialogue_maps(args.input)
+    data_id2question, data_id2dialogue_id = build_question_and_dialogue_maps(args.input)
     data_id2ground_truth = build_ground_truth_map(ground_data)
 
-    counts, log_call, log_use, log_nouse = evaluate_results(
-        result_data, data_id2ground_truth, data_id2question, data_id2dialogue
+    accuracies, log_call, log_use, log_nouse = evaluate_results(
+        result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
     )
-    accuracies = compute_accuracies(counts)
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     safe_model_name = m.group(1) if m else "unknown"
