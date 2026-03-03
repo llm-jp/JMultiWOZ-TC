@@ -140,26 +140,100 @@ def compute_accuracies(counts: dict):
 def write_summary(
     output_path: Path,
     accuracies: dict,
-    incorrect_call_precision: list,
-    incorrect_use_judgement: list,
-    incorrect_nouse_judgement: list,
 ):
-    """要約と誤答ログの書き出し
+    """要約の書き出し
 
-    計算済みの要約(5行)と誤答ログを、JSONL形式で出力する。
+    計算済みの要約(5行)をJSONL形式で出力する。
     出力の順序は次の通り:
         - 全体の要約 (1行)
         - ツール使用判断の要約 (1行)
         - ツール不使用判断の要約 (1行)
         - ツール使用・不使用判断の要約 (1行)
         - tool call精度の要約 (1行)
+
+    Args:
+        output_path (Path): 出力ファイルパス。
+        accuracies (dict): 各種指標の要約を格納した辞書。
+
+    Returns:
+        None: なし。
+    """
+    overall = accuracies["overall"]
+    used = accuracies["used"]
+    unused = accuracies["unused"]
+    use_or_nouse = accuracies["use_or_nouse"]
+    call = accuracies["call"]
+
+    with open(output_path, "w", encoding="utf-8") as out_f:
+        all_summary = {
+            "評価項目": "全体",
+            "総データ数": overall["total"],
+            "評価対象数": overall["evaluated"],
+            "正解数": overall["correct"],
+            "不正解数": overall["incorrect"],
+            "出力ミスのデータ数": overall["error"],
+            "全体の正答率(%)": overall["acc"],
+        }
+        used_summary = {
+            "評価項目": "ツール使用判断",
+            "総データ数": used["total"],
+            "評価対象数": used["evaluated"],
+            "正解数": used["correct"],
+            "不正解数": used["incorrect"],
+            "出力ミスのデータ数": used["error"],
+            "全体の正答率(%)": used["acc"],
+        }
+        unused_summary = {
+            "評価項目": "ツール不使用判断",
+            "総データ数": unused["total"],
+            "評価対象数": unused["evaluated"],
+            "正解数": unused["correct"],
+            "不正解数": unused["incorrect"],
+            "出力ミスのデータ数": unused["error"],
+            "全体の正答率(%)": unused["acc"],
+        }
+        use_or_nouse_summary = {
+            "評価項目": "ツール使用・不使用判断",
+            "総データ数": use_or_nouse["total"],
+            "評価対象数": use_or_nouse["evaluated"],
+            "正解数": use_or_nouse["correct"],
+            "不正解数": use_or_nouse["incorrect"],
+            "出力ミスのデータ数": use_or_nouse["error"],
+            "全体の正答率(%)": use_or_nouse["acc"],
+        }
+        call_summary = {
+            "評価項目": "tool call精度",
+            "総データ数": call["total"],
+            "評価対象数": call["evaluated"],
+            "正解数": call["correct"],
+            "不正解数": call["incorrect"],
+            "出力ミスのデータ数": call["error"],
+            "全体の正答率(%)": call["acc"],
+        }
+        
+        out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(used_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(unused_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(use_or_nouse_summary, ensure_ascii=False) + "\n")
+        out_f.write(json.dumps(call_summary, ensure_ascii=False) + "\n")
+
+
+def write_incorrect_logs(
+    output_path: Path,
+    incorrect_call_precision: list,
+    incorrect_use_judgement: list,
+    incorrect_nouse_judgement: list,
+):
+    """誤答ログの書き出し
+
+    誤答ログをJSONL形式で出力する。
+    出力の順序は次の通り:
         - tool call精度の誤答ログをすべて
         - ツール使用判断の誤答ログをすべて
         - ツール不使用判断の誤答ログをすべて
 
     Args:
         output_path (Path): 出力ファイルパス。
-        accuracies (dict): 各種指標の要約を格納した辞書。
         incorrect_call_precision (list):
             ツール呼び出し内容そのものが誤っているケースのログ
             ("tool call精度" の誤答)。
@@ -173,7 +247,13 @@ def write_summary(
     Returns:
         None: なし。
     """
-    raise NotImplementedError()
+    with open(output_path, "w", encoding="utf-8") as out_f:
+        for bad in incorrect_call_precision:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
+        for bad in incorrect_use_judgement:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
+        for bad in incorrect_nouse_judgement:
+            out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
 
 
 
@@ -247,12 +327,15 @@ def main():
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     safe_model_name = m.group(1) if m else "unknown"
-    output_path = Path(f"score_{safe_model_name}.json")
+    summary_path = Path(f"score_{safe_model_name}.json")
+    incorrect_path = Path(f"incorrect_{safe_model_name}.json")
 
-    write_summary(output_path, accuracies, log_call, log_use, log_nouse)
+    write_summary(summary_path, accuracies)
+    write_incorrect_logs(incorrect_path, log_call, log_use, log_nouse)
     print_summary_to_console(accuracies)
     print(f"{'='*80}")
-    print(f"評価結果のJSONを書き出しました: {output_path}")
+    print(f"評価結果(サマリー)を書き出しました: {summary_path}")
+    print(f"評価結果(誤答ログ)を書き出しました: {incorrect_path}")
 
 
 if __name__ == "__main__":
