@@ -194,7 +194,58 @@ def aggregate_tool_call_metrics(
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
     """
-    raise NotImplementedError()
+    call_total = 0
+    call_error = 0
+    call_correct = 0
+    call_incorrect = 0
+
+    incorrect_call_precision = []
+
+    for rec in result_data:
+        data_id = rec.get("data_id")
+        output_calls = rec.get("tool_calls", [])
+        ground_truth_calls = data_id2ground_truth.get(data_id, [])
+        dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
+        ground_truth_used = bool(ground_truth_calls)
+
+        if not ground_truth_used:
+            continue
+
+        call_total += 1
+        if rec.get("error"):
+            call_error += 1
+            continue
+
+        output_calls_set = normalize_tool_calls(output_calls)
+        ground_truth_set = normalize_tool_calls(ground_truth_calls)
+        is_correct_call = output_calls_set == ground_truth_set
+        if is_correct_call:
+            call_correct += 1
+        else:
+            call_incorrect += 1
+            incorrect_call_precision.append(
+                {
+                    "data_id": data_id,
+                    "dialogue_id": dlg_id,
+                    "Incorrect_genre": "tool call精度",
+                    "question": data_id2question.get(data_id),
+                    "output": output_calls,
+                    "ground_truth": ground_truth_calls,
+                }
+            )
+
+    call_evaluated = call_total - call_error
+    call_acc = call_correct / call_evaluated * 100 if call_evaluated > 0 else 0
+
+    call_stats = {
+        "total": call_total,
+        "evaluated": call_evaluated,
+        "correct": call_correct,
+        "incorrect": call_incorrect,
+        "error": call_error,
+        "acc": call_acc,
+    }
+    return call_stats, incorrect_call_precision
 
 
 def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id):
