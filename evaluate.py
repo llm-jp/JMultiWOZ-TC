@@ -181,7 +181,7 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
         data_id = rec.get("data_id")
         output_calls = rec.get("tool_calls", [])
         ground_truth_calls = data_id2ground_truth.get(data_id, [])
-        dlg_id = rec.get("dialogue_id") or data_id2dialogue.get(data_id)
+        dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
 
         if rec.get("error"):
             if ground_truth_calls:
