@@ -185,10 +185,8 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
 
         if rec.get("error"):
             if ground_truth_calls:
-                use_total += 1
                 use_error += 1
             else:
-                nouse_total += 1
                 nouse_error += 1
             continue
 
@@ -198,7 +196,6 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
         judgement_correct = len(output_calls_set) > 0 and len(ground_truth_set) > 0
 
         if ground_truth_set:
-            use_total += 1
             if judgement_correct:
                 use_correct += 1
             else:
@@ -214,7 +211,6 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
                     }
                 )
         else:
-            nouse_total += 1
             if judgement_correct:
                 nouse_correct += 1
             else:
@@ -230,9 +226,11 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
                     }
                 )
 
+    use_total = use_correct + use_incorrect + use_error
     use_evaluated = use_total - use_error
     use_acc = use_correct / use_evaluated * 100 if use_evaluated > 0 else 0
 
+    nouse_total = nouse_correct + nouse_incorrect + nouse_error
     nouse_evaluated = nouse_total - nouse_error
     nouse_acc = nouse_correct / nouse_evaluated * 100 if nouse_evaluated > 0 else 0
 
