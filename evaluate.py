@@ -206,9 +206,8 @@ def aggregate_tool_call_metrics(
         output_calls = rec.get("tool_calls", [])
         ground_truth_calls = data_id2ground_truth.get(data_id, [])
         dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
-        ground_truth_used = bool(ground_truth_calls)
 
-        if not ground_truth_used:
+        if len(ground_truth_calls) == 0:
             continue
 
         call_total += 1
