@@ -154,7 +154,7 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
         else:
             incorrect += 1
 
-    evaluated = total - error
+    evaluated = correct + incorrect
     acc = correct / evaluated * 100 if evaluated > 0 else 0
 
     return {
