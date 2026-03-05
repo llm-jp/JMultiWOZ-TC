@@ -207,7 +207,7 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
                     {
                         "data_id": data_id,
                         "dialogue_id": dlg_id,
-                        "Incorrect_genre": incorrect_genre,
+                        "incorrect_genre": incorrect_genre,
                         "question": data_id2question.get(data_id),
                         "output": output_calls,
                         "ground_truth": ground_truth_calls,
