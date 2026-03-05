@@ -197,12 +197,7 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
         output_used = bool(output_calls_set)
         ground_truth_used = bool(ground_truth_set)
 
-        if ground_truth_used:
-            judgement_correct = output_used
-            incorrect_genre = "ツール使用判断"
-        else:
-            judgement_correct = not output_used
-            incorrect_genre = "ツール不使用判断"
+        judgement_correct = len(output_calls_set) > 0 and len(ground_truth_set) > 0
 
         if ground_truth_used:
             use_total += 1
