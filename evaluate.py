@@ -138,10 +138,9 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
 def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,):
     """ツール使用/不使用判断の集計
 
-    全レコードを走査し、
+    全レコードを走査し、正解がツール使用か不使用かで分けて評価する。
     - 正解がツール使用ケース (`ground_truth` が非空)
     - 正解がツール不使用ケース (`ground_truth` が空)
-    を分けて、判断の正誤を集計する。
 
     不正解ケースは用途別にログへ保存する。
     `error` レコードは、正解側の使用/不使用に応じて `error` のみ加算する。
