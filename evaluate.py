@@ -175,9 +175,9 @@ def aggregate_tool_call_metrics(
 ):
     """tool call精度の集計
 
-    全レコードを走査し、正解がツールを使用するケース (`ground_truth` が非空) に限定して
+    正解がツールを使用するケース (`ground_truth` が非空) に限定して
     tool call 内容の厳密一致精度を集計する。
-    判定は、関数名と正規化引数文字列の集合一致で行う。
+    `aggregate_overall_metrics` を再利用し、正解がツールを使用するケースのみをフィルタして評価する。
     不一致ケースは誤答ログに保存する。
     対象ケースで `error` がある場合は `error` のみ加算して未評価とする。
 
@@ -194,34 +194,26 @@ def aggregate_tool_call_metrics(
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
     """
-    call_total = 0
-    call_error = 0
-    call_correct = 0
-    call_incorrect = 0
+    filtered_data = [
+        rec for rec in result_data
+        if data_id2ground_truth.get(rec.get("data_id"), [])
+    ]
+
+    call_stats = aggregate_overall_metrics(filtered_data, data_id2ground_truth)
 
     incorrect_call_precision = []
-
-    for rec in result_data:
+    for rec in filtered_data:
         data_id = rec.get("data_id")
         output_calls = rec.get("tool_calls", [])
         ground_truth_calls = data_id2ground_truth.get(data_id, [])
-        dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
 
-        if len(ground_truth_calls) == 0:
-            continue
-
-        call_total += 1
         if rec.get("error"):
-            call_error += 1
             continue
 
         output_calls_set = normalize_tool_calls(output_calls)
         ground_truth_set = normalize_tool_calls(ground_truth_calls)
-        is_correct_call = output_calls_set == ground_truth_set
-        if is_correct_call:
-            call_correct += 1
-        else:
-            call_incorrect += 1
+        if output_calls_set != ground_truth_set:
+            dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
             incorrect_call_precision.append(
                 {
                     "data_id": data_id,
@@ -233,17 +225,6 @@ def aggregate_tool_call_metrics(
                 }
             )
 
-    call_evaluated = call_total - call_error
-    call_acc = call_correct / call_evaluated * 100 if call_evaluated > 0 else 0
-
-    call_stats = {
-        "total": call_total,
-        "evaluated": call_evaluated,
-        "correct": call_correct,
-        "incorrect": call_incorrect,
-        "error": call_error,
-        "acc": call_acc,
-    }
     return call_stats, incorrect_call_precision
 
 
