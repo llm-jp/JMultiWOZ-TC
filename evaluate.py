@@ -132,7 +132,40 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
             - error (int): 出力ミス等により未評価となった件数。
             - acc (float): 正答率(%)。
     """
-    raise NotImplementedError()
+    total = len(result_data)
+    correct = 0
+    incorrect = 0
+    error = 0
+
+    for rec in result_data:
+        data_id = rec.get("data_id")
+        output_calls = rec.get("tool_calls", [])
+        ground_truth_calls = data_id2ground_truth.get(data_id, [])
+
+        if rec.get("error"):
+            error += 1
+            continue
+
+        output_calls_set = normalize_tool_calls(output_calls)
+        ground_truth_set = normalize_tool_calls(ground_truth_calls)
+
+        if output_calls_set == ground_truth_set:
+            correct += 1
+        else:
+            incorrect += 1
+
+    evaluated = correct + incorrect
+    acc = correct / evaluated * 100 if evaluated > 0 else 0
+
+    return {
+        "total": total,
+        "evaluated": evaluated,
+        "correct": correct,
+        "incorrect": incorrect,
+        "error": error,
+        "acc": acc,
+    }
+
 
 
 def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,):
