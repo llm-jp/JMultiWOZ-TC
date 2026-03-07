@@ -138,10 +138,9 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
 def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,):
     """ツール使用/不使用判断の集計
 
-    全レコードを走査し、
+    全レコードを走査し、正解がツール使用か不使用かで分けて評価する。
     - 正解がツール使用ケース (`ground_truth` が非空)
     - 正解がツール不使用ケース (`ground_truth` が空)
-    を分けて、判断の正誤を集計する。
 
     不正解ケースは用途別にログへ保存する。
     `error` レコードは、正解側の使用/不使用に応じて `error` のみ加算する。
@@ -164,7 +163,99 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
             - incorrect_nouse_judgement (list):
               本来ツールを使用しないケースの誤答ログ配列。
     """
-    raise NotImplementedError()
+    use_total = 0
+    use_error = 0
+    use_correct = 0
+    use_incorrect = 0
+
+    nouse_total = 0
+    nouse_error = 0
+    nouse_correct = 0
+    nouse_incorrect = 0
+
+    incorrect_use_judgement = []
+    incorrect_nouse_judgement = []
+
+    for rec in result_data:
+        data_id = rec.get("data_id")
+        output_calls = rec.get("tool_calls", [])
+        ground_truth_calls = data_id2ground_truth.get(data_id, [])
+        dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
+
+        if rec.get("error"):
+            if ground_truth_calls:
+                use_error += 1
+            else:
+                nouse_error += 1
+            continue
+
+        output_calls_set = normalize_tool_calls(output_calls)
+        ground_truth_set = normalize_tool_calls(ground_truth_calls)
+
+        judgement_correct = len(output_calls_set) > 0 and len(ground_truth_set) > 0
+
+        if ground_truth_set:
+            if judgement_correct:
+                use_correct += 1
+            else:
+                use_incorrect += 1
+                incorrect_use_judgement.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "incorrect_genre": "ツール使用判断",
+                        "question": data_id2question.get(data_id),
+                        "output": output_calls,
+                        "ground_truth": ground_truth_calls,
+                    }
+                )
+        else:
+            if judgement_correct:
+                nouse_correct += 1
+            else:
+                nouse_incorrect += 1
+                incorrect_nouse_judgement.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "incorrect_genre": "ツール不使用判断",
+                        "question": data_id2question.get(data_id),
+                        "output": output_calls,
+                        "ground_truth": ground_truth_calls,
+                    }
+                )
+
+    use_total = use_correct + use_incorrect + use_error
+    use_evaluated = use_total - use_error
+    use_acc = use_correct / use_evaluated * 100 if use_evaluated > 0 else 0
+
+    nouse_total = nouse_correct + nouse_incorrect + nouse_error
+    nouse_evaluated = nouse_total - nouse_error
+    nouse_acc = nouse_correct / nouse_evaluated * 100 if nouse_evaluated > 0 else 0
+
+    use_stats = {
+        "total": use_total,
+        "evaluated": use_evaluated,
+        "correct": use_correct,
+        "incorrect": use_incorrect,
+        "error": use_error,
+        "acc": use_acc,
+    }
+    nouse_stats = {
+        "total": nouse_total,
+        "evaluated": nouse_evaluated,
+        "correct": nouse_correct,
+        "incorrect": nouse_incorrect,
+        "error": nouse_error,
+        "acc": nouse_acc,
+    }
+
+    return (
+        use_stats,
+        nouse_stats,
+        incorrect_use_judgement,
+        incorrect_nouse_judgement,
+    )
 
 
 def aggregate_tool_call_metrics(
