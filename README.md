@@ -120,6 +120,55 @@ python evaluate.py \
 	--input jmultiwoz_tc_input.jsonl
 ```
 
+## 出力ファイル
+
+### 生成結果: `result_{safe_model_name}.jsonl`
+- 作成元: `python generate.py`
+- 形式: JSONL
+- 用途: 各 `data_id` に対するモデルのツール呼び出し出力を保存
+
+主なレコード形式（成功時）:
+```json
+{
+	"data_id": "...",
+	"dialogue_id": "...",
+	"tool_calls": [
+		{"name": "tool_name", "arguments": {"key": "value"}}
+	]
+}
+```
+
+主なレコード形式（エラー発生時）:
+```json
+{
+	"data_id": "...",
+	"dialogue_id": "...",
+	"tool_calls": [],
+	"error": "TimeoutError"
+}
+```
+
+### 評価サマリ: `score_{safe_model_name}.json`
+- 作成元: `python evaluate.py --result ...`
+- 形式: JSONL
+- 行数: 5行固定
+	- 全体
+	- ツール使用判断
+	- ツール不使用判断
+	- ツール使用・不使用判断
+	- tool call精度
+- 各行の主キー:
+	- `評価項目`, `総データ数`, `評価対象数`, `正解数`, `不正解数`, `出力ミスのデータ数`, `全体の正答率(%)`
+
+### 誤答ログ: `incorrect_{safe_model_name}.json`
+- 作成元: `python evaluate.py --result ...`
+- 形式: JSONL
+- 用途: 誤答ケースを1行1JSONで保存
+- 出力順:
+	1. tool call精度の誤答
+	2. ツール使用判断の誤答
+	3. ツール不使用判断の誤答
+
 ## 動作しない場合
 - vLLM が立ち上がらない/重い: モデルサイズに見合った GPU/メモリを確保し、`--tensor-parallel-size` や `--gpu-memory-utilization` を調整してください。
 - 生成がタイムアウトする: `generate.py` はタイムアウト時に自動で数回リトライし、最終的に該当 `data_id` を `TimeoutError` として出力します。サーバ/モデル負荷を下げるか、ネットワーク状態を確認してください。
