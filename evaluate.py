@@ -188,8 +188,8 @@ def aggregate_tool_call_metrics(
         data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
 
     Returns:
-        tuple: `(call_stats, incorrect_call_precision)` の2要素タプル。
-            - call_stats (dict): tool call 精度の集計結果
+        tuple: `(func_stats, incorrect_call_precision)` の2要素タプル。
+            - func_stats (dict): tool call 精度の集計結果
               (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
@@ -199,7 +199,7 @@ def aggregate_tool_call_metrics(
         if data_id2ground_truth.get(rec.get("data_id"), [])
     ]
 
-    call_stats, incorrect_call_precision = aggregate_overall_metrics(
+    func_stats, incorrect_call_precision = aggregate_overall_metrics(
         filtered_data,
         data_id2ground_truth,
         data_id2question=data_id2question,
@@ -207,7 +207,7 @@ def aggregate_tool_call_metrics(
         incorrect_genre="tool call精度",
     )
 
-    return call_stats, incorrect_call_precision
+    return func_stats, incorrect_call_precision
 
 
 def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id):
