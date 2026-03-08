@@ -112,7 +112,13 @@ def build_ground_truth_map(ground_items: list):
 
 
 
-def aggregate_overall_metrics(result_data, data_id2ground_truth):
+def aggregate_overall_metrics(
+    result_data,
+    data_id2ground_truth,
+    data_id2question=None,
+    data_id2dialogue_id=None,
+    incorrect_genre=None,
+):
     """全体評価の集計
 
     全レコードを走査し、モデル出力の tool call 集合と正解の tool call 集合が
@@ -122,20 +128,26 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
     Args:
         result_data (list): LLM出力のレコード配列。
         data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
+        data_id2question (dict): `data_id` から質問文を引く辞書。
+        data_id2dialogue_id (dict): `data_id` から対話IDを引く辞書。
+        incorrect_genre (str): 不正解ログに入れるジャンル名。
 
     Returns:
-        dict: 全体評価の集計結果。
-            - total (int): 総データ件数。
-            - evaluated (int): 評価対象件数 (total - error)。
-            - correct (int): 厳密一致した件数。
-            - incorrect (int): 厳密不一致の件数。
-            - error (int): 出力ミス等により未評価となった件数。
-            - acc (float): 正答率(%)。
+        tuple: `(stats, incorrect_logs)` の2要素タプル。
+            - stats (dict): 全体評価の集計結果。
+                - total (int): 総データ件数。
+                - evaluated (int): 評価対象件数 (total - error)。
+                - correct (int): 厳密一致した件数。
+                - incorrect (int): 厳密不一致の件数。
+                - error (int): 出力ミス等により未評価となった件数。
+                - acc (float): 正答率(%)。
+            - incorrect_logs (list): 不正解ケースのログ配列。
     """
     total = len(result_data)
     correct = 0
     incorrect = 0
     error = 0
+    incorrect_logs = []
 
     for rec in result_data:
         data_id = rec.get("data_id")
@@ -153,11 +165,24 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
             correct += 1
         else:
             incorrect += 1
+            dlg_id = rec.get("dialogue_id") or (
+                data_id2dialogue_id.get(data_id) if data_id2dialogue_id else None
+            )
+            incorrect_logs.append(
+                {
+                    "data_id": data_id,
+                    "dialogue_id": dlg_id,
+                    "Incorrect_genre": incorrect_genre,
+                    "question": data_id2question.get(data_id) if data_id2question else None,
+                    "output": output_calls,
+                    "ground_truth": ground_truth_calls,
+                }
+            )
 
     evaluated = correct + incorrect
     acc = correct / evaluated * 100 if evaluated > 0 else 0
 
-    return {
+    stats = {
         "total": total,
         "evaluated": evaluated,
         "correct": correct,
@@ -165,6 +190,9 @@ def aggregate_overall_metrics(result_data, data_id2ground_truth):
         "error": error,
         "acc": acc,
     }
+
+
+    return stats, incorrect_logs
 
 
 
@@ -344,7 +372,7 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
     total = len(result_data)
     print(f"評価開始: {total}件のデータを処理します\n")
 
-    overall_stats = aggregate_overall_metrics(result_data, data_id2ground_truth)
+    overall_stats, _ = aggregate_overall_metrics(result_data, data_id2ground_truth)
 
     (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement,) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,)
 
