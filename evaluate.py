@@ -199,31 +199,13 @@ def aggregate_tool_call_metrics(
         if data_id2ground_truth.get(rec.get("data_id"), [])
     ]
 
-    call_stats = aggregate_overall_metrics(filtered_data, data_id2ground_truth)
-
-    incorrect_call_precision = []
-    for rec in filtered_data:
-        data_id = rec.get("data_id")
-        output_calls = rec.get("tool_calls", [])
-        ground_truth_calls = data_id2ground_truth.get(data_id, [])
-
-        if rec.get("error"):
-            continue
-
-        output_calls_set = normalize_tool_calls(output_calls)
-        ground_truth_set = normalize_tool_calls(ground_truth_calls)
-        if output_calls_set != ground_truth_set:
-            dlg_id = rec.get("dialogue_id") or data_id2dialogue_id.get(data_id)
-            incorrect_call_precision.append(
-                {
-                    "data_id": data_id,
-                    "dialogue_id": dlg_id,
-                    "Incorrect_genre": "tool call精度",
-                    "question": data_id2question.get(data_id),
-                    "output": output_calls,
-                    "ground_truth": ground_truth_calls,
-                }
-            )
+    call_stats, incorrect_call_precision = aggregate_overall_metrics(
+        filtered_data,
+        data_id2ground_truth,
+        data_id2question=data_id2question,
+        data_id2dialogue_id=data_id2dialogue_id,
+        incorrect_genre="tool call精度",
+    )
 
     return call_stats, incorrect_call_precision
 
