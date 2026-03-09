@@ -384,3 +384,6 @@ def main():
         )
 
     print(f"出力結果のJSONLを書き出しました: {output_path}\n")
+
+if __name__ == "__main__":
+    main()
