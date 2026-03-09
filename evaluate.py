@@ -327,9 +327,9 @@ def aggregate_tool_call_metrics(
 ):
     """tool call精度の集計
 
-    全レコードを走査し、正解がツールを使用するケース (`ground_truth` が非空) に限定して
+    正解がツールを使用するケース (`ground_truth` が非空) に限定して
     tool call 内容の厳密一致精度を集計する。
-    判定は、関数名と正規化引数文字列の集合一致で行う。
+    `aggregate_overall_metrics` を再利用し、正解がツールを使用するケースのみをフィルタして評価する。
     不一致ケースは誤答ログに保存する。
     対象ケースで `error` がある場合は `error` のみ加算して未評価とする。
 
@@ -340,13 +340,26 @@ def aggregate_tool_call_metrics(
         data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
 
     Returns:
-        tuple: `(call_stats, incorrect_call_precision)` の2要素タプル。
-            - call_stats (dict): tool call 精度の集計結果
+        tuple: `(func_stats, incorrect_call_precision)` の2要素タプル。
+            - func_stats (dict): tool call 精度の集計結果
               (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
     """
-    raise NotImplementedError()
+    filtered_data = [
+        rec for rec in result_data
+        if data_id2ground_truth.get(rec.get("data_id"), [])
+    ]
+
+    func_stats, incorrect_call_precision = aggregate_overall_metrics(
+        filtered_data,
+        data_id2ground_truth,
+        data_id2question=data_id2question,
+        data_id2dialogue_id=data_id2dialogue_id,
+        incorrect_genre="tool call精度",
+    )
+
+    return func_stats, incorrect_call_precision
 
 
 def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id):
