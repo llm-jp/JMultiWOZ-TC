@@ -253,7 +253,10 @@ def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2ques
         output_calls_set = normalize_tool_calls(output_calls)
         ground_truth_set = normalize_tool_calls(ground_truth_calls)
 
-        judgement_correct = len(output_calls_set) > 0 and len(ground_truth_set) > 0
+        if len(output_calls_set) > 0:
+            judgement_correct = len(ground_truth_set) > 0
+        else:
+            judgement_correct = len(ground_truth_set) == 0
 
         if ground_truth_set:
             if judgement_correct:
