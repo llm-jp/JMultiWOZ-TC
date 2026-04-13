@@ -362,6 +362,11 @@ def aggregate_tool_call_metrics(
         incorrect_genre="tool call精度",
     )
 
+    incorrect_call_precision = [
+        bad for bad in incorrect_call_precision
+        if normalize_tool_calls(bad.get("output", []))
+    ]
+
     return func_stats, incorrect_call_precision
 
 
