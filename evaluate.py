@@ -333,7 +333,7 @@ def aggregate_tool_call_metrics(
     正解がツールを使用するケース (`ground_truth` が非空) に限定して
     tool call 内容の厳密一致精度を集計する。
     `aggregate_overall_metrics` を再利用し、正解がツールを使用するケースのみをフィルタして評価する。
-    不一致ケースは誤答ログに保存する。
+    score 集計は維持しつつ、実際にツールを使用した不一致のみを誤答ログに保存する。
     対象ケースで `error` がある場合は `error` のみ加算して未評価とする。
 
     Args:
@@ -361,6 +361,11 @@ def aggregate_tool_call_metrics(
         data_id2dialogue_id=data_id2dialogue_id,
         incorrect_genre="tool call精度",
     )
+
+    incorrect_call_precision = [
+        bad for bad in incorrect_call_precision
+        if normalize_tool_calls(bad.get("output", []))
+    ]
 
     return func_stats, incorrect_call_precision
 
