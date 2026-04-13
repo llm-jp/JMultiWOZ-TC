@@ -10,9 +10,10 @@ AIエージェントのツール呼び出しを評価するためのデータセ
 JMultiWOZ-TC/
 ├── generate.py            
 ├── evaluate.py 
-├── tools.json             
-├── jmultiwoz_tc_input.jsonl 
-└── jmultiwoz_tc_ground.jsonl 
+├── dataset.zip            # ツール定義とデータセット（展開が必要）
+│   ├── tools.json             
+│   ├── jmultiwoz_tc_input.jsonl 
+│   └── jmultiwoz_tc_ground.jsonl 
 ```
 
 ## 概要
@@ -32,7 +33,13 @@ JMultiWOZ-TC/
 ## セットアップ
 以下を順に実施してください。
 
-Python環境の準備と依存インストール
+1. データセットの展開
+```bash
+# dataset.zip を解凍（tools.json と各 JSONL ファイルが抽出されます）
+unzip dataset.zip
+```
+
+2. Python環境の準備と依存インストール
 ```bash
 # 仮想環境の作成と有効化（macOS/Linux）
 python -m venv .venv
