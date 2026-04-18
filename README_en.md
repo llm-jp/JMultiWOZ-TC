@@ -183,22 +183,22 @@ Main record format (error):
 - Judgment: Whether the model's `tool_calls` and the ground-truth `ground_truth` are an exact match for each item
 - What it measures: Final accuracy that combines both whether the tool is used and, if so, whether the call content is correct
 
-**Tool-use Decision**
+**Use Decision**
 - Target: Data where the ground truth has a non-empty `ground_truth` (cases where a tool should be used)
 - Judgment: Whether the model produced one or more `tool_calls` (whether it used a tool when it should have)
 - What it measures: Whether the model can choose to use tools when needed
 
-**Tool-non-use Decision**
+**Non-use Decision**
 - Target: Data where the ground truth has an empty `ground_truth` (cases where a tool is not needed)
 - Judgment: Whether the model did not produce `tool_calls` (whether it avoids unnecessary tool calls)
 - What it measures: Whether the model suppresses unnecessary tool calls
 
-**Tool-use / Non-use Decision**
-- Target: All data combined from the above **Tool-use Decision** and **Tool-non-use Decision**
+**Call Decision**
+- Target: All data combined from the above **Use Decision** and **Non-use Decision**
 - Judgment: Whether the binary decision of “use” or “do not use” is correct
 - What it measures: Ability to decide whether to use tools (without evaluating the content of the call itself)
 
-**Tool-call Accuracy**
+**Call Accuracy**
 - Target: Data where the ground truth has a non-empty `ground_truth` (cases where a tool should be used)
 - Judgment: Whether the contents of `tool_calls` exactly match the ground truth
   - Match condition: Each call's `name` and `arguments` must match
