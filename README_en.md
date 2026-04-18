@@ -160,10 +160,10 @@ Main record format (error):
 - Format: JSONL
 - Fixed number of lines: 5
   - Overall
-  - Tool-use decision
-  - Tool-non-use decision
-  - Tool-use / non-use decision
-  - Tool-call accuracy
+  - Use decision
+  - Non-use decision
+  - Call decision
+  - Call accuracy
 - Main keys per line:
   - `評価項目`, `総データ数`, `評価対象数`, `正解数`, `不正解数`, `出力ミスのデータ数`, `全体の正答率(%)`
 
@@ -211,9 +211,9 @@ Main record format (error):
 - Format: JSONL
 - Purpose: Stores incorrect cases, one JSON object per line
 - Output order:
-  1. Tool-call accuracy errors
-  2. Tool-use decision errors
-  3. Tool-non-use decision errors
+  1. Call accuracy errors
+  2. Use decision errors
+  3. Non-use decision errors
 
 ## If It Does Not Work
 - If vLLM fails to start or is too slow: Ensure that the GPU and memory are sufficient for the model size, and adjust `--tensor-parallel-size` and `--gpu-memory-utilization` as needed
