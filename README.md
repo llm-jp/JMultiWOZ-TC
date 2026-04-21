@@ -10,10 +10,10 @@ AIエージェントのツール呼び出しを評価するためのデータセ
 JMultiWOZ-TC/
 ├── generate.py            
 ├── evaluate.py 
-├── dataset.zip            # ツール定義とデータセット（展開が必要）
-│   ├── tools.json             
-│   ├── jmultiwoz_tc_input.jsonl 
-│   └── jmultiwoz_tc_ground.jsonl 
+└── dataset.zip            # ツール定義とデータセット（展開が必要）
+    ├── tools.json             
+    ├── jmultiwoz_tc_input.jsonl 
+    └── jmultiwoz_tc_ground.jsonl 
 ```
 
 ## 概要
