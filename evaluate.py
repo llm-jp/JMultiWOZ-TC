@@ -598,7 +598,7 @@ def main():
         "--result",
         type=Path,
         required=True,
-        help="LLM出力ファイル(result_{safe_model_name}.jsonl)のパスを指定",
+        help="LLM出力ファイル(result_{save_model_name}.jsonl)のパスを指定",
     )
     parser.add_argument(
         "--ground",
@@ -626,9 +626,9 @@ def main():
     )
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
-    safe_model_name = m.group(1) if m else "unknown"
-    summary_path = Path(f"score_{safe_model_name}.json")
-    incorrect_path = Path(f"incorrect_{safe_model_name}.json")
+    save_model_name = m.group(1) if m else "unknown"
+    summary_path = Path(f"score_{save_model_name}.json")
+    incorrect_path = Path(f"incorrect_{save_model_name}.json")
 
     write_summary(summary_path, accuracies)
     write_incorrect_logs(incorrect_path, log_call, log_use, log_nouse)
