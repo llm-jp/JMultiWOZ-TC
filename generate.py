@@ -1,9 +1,10 @@
-import json
 import argparse
-import httpx
+import json
 import time
 from pathlib import Path
-from openai import OpenAI, APITimeoutError
+
+import httpx
+from openai import APITimeoutError, OpenAI
 
 
 def load_tools(file_path):
@@ -13,7 +14,6 @@ def load_tools(file_path):
 
     Args:
         tools_path (Path): ツールJSONファイルのパス．
-
     Returns:
         list: ツール定義のリスト．
     """
@@ -180,6 +180,10 @@ def serialize_tool_calls(tool_calls) -> list:
         # 関数呼び出しがある場合のみシリアライズを必要とする
         if hasattr(tc, "function"):
             args_dict = json.loads(tc.function.arguments)
+            if not isinstance(args_dict, dict):
+                raise ValueError(
+                    f"arguments が dict 型ではありません: {type(args_dict)}"
+                )
             serializable.append(
                 {
                     "name": tc.function.name,
@@ -299,8 +303,13 @@ def process_item(
         if response.choices[0].message.tool_calls
         else []
     )
-
-    serializable_tool_calls = serialize_tool_calls(tool_calls)
+    try:
+        serhializable_tool_calls = serialize_tool_calls(tool_calls)
+    except (json.JSONDecodeError, ValueError) as e:
+        llm_rec = build_error_record(data_id, dialogue_id, f"{type(e).__name__}: {e}")
+        append_jsonl_record(output_path, llm_rec)
+        print("-" * 80)
+        return
     log_tool_calls(serializable_tool_calls)
 
     llm_rec = build_success_record(
@@ -384,6 +393,7 @@ def main():
         )
 
     print(f"出力結果のJSONLを書き出しました: {output_path}\n")
+
 
 if __name__ == "__main__":
     main()
