@@ -40,7 +40,7 @@ def load_jsonl(file_path):
     return data
 
 
-def get_model_and_safe_name(client) -> tuple[str, str]:
+def get_model_and_save_name(client) -> tuple[str, str]:
     """モデル名の取得
 
     起動したvllmサーバーからモデル名を取得し、
@@ -53,8 +53,8 @@ def get_model_and_safe_name(client) -> tuple[str, str]:
         tuple[str, str]: （モデル名, サニタイズ済みモデル名）。
     """
     model_name = client.models.list().data[0].id
-    safe_model_name = model_name.replace("/", "_")
-    return model_name, safe_model_name
+    save_model_name = model_name.replace("/", "_")
+    return model_name, save_model_name
 
 
 def load_existing_data_ids(output_path: Path) -> set:
@@ -367,9 +367,9 @@ def main():
     tools = load_tools(args.tools)
     input_data = load_jsonl(args.input)
 
-    model_name, safe_model_name = get_model_and_safe_name(client)
+    model_name, save_model_name = get_model_and_save_name(client)
 
-    output_path = args.output_dir / f"result_{safe_model_name}.jsonl"
+    output_path = args.output_dir / f"result_{save_model_name}.jsonl"
     existing_ids = load_existing_data_ids(output_path)
 
     total = len(input_data)

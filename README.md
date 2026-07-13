@@ -18,8 +18,8 @@ JMultiWOZ-TC/
 
 ## 概要
 - サーバ: vLLM を OpenAI 互換エンドポイントとして起動（`--enable-auto-tool-choice` と `--tool-call-parser hermes` を使用）
-- 生成: [generate.py](generate.py) が OpenAI SDK 経由でモデルに問い合わせ、JSONL 形式の `result_{safe_model_name}.jsonl` を出力
-- 評価: [evaluate.py](evaluate.py) は `jmultiwoz_tc_ground.jsonl` とモデル出力を比較し、サマリを `score_{safe_model_name}.json`、誤答ログを `incorrect_{safe_model_name}.json` に出力する設計
+- 生成: [generate.py](generate.py) が OpenAI SDK 経由でモデルに問い合わせ、JSONL 形式の `result_{save_model_name}.jsonl` を出力
+- 評価: [evaluate.py](evaluate.py) は `jmultiwoz_tc_ground.jsonl` とモデル出力を比較し、サマリを `score_{save_model_name}.json`、誤答ログを `incorrect_{save_model_name}.json` に出力する設計
 
 ### ファイル説明
 - `tools.json`: ツール定義（Function Calling の仕様）。[generate.py](generate.py)が読み込みます。
@@ -66,14 +66,14 @@ source .venv/bin/activate
 python generate.py
 ```
 
-生成が完了すると、モデル名に応じて `result_{safe_model_name}.jsonl` が作成されます。
+生成が完了すると、モデル名に応じて `result_{save_model_name}.jsonl` が作成されます。
 
 3) 評価
 ```bash
-python evaluate.py --result result_{safe_model_name}.jsonl
+python evaluate.py --result result_{save_model_name}.jsonl
 ```
 
-評価結果のサマリがコンソールに表示され、詳細は `score_{safe_model_name}.json` と `incorrect_{safe_model_name}.json` に書き出されます。
+評価結果のサマリがコンソールに表示され、詳細は `score_{save_model_name}.json` と `incorrect_{save_model_name}.json` に書き出されます。
 
 ## 実行オプション
 
@@ -93,7 +93,7 @@ python generate.py
 - `--openai-api-key` (既定: `dummy`)
 	- OpenAIクライアント初期化用のAPIキー
 - `--output-dir` (既定: `.`)
-	- `result_{safe_model_name}.jsonl` の出力先ディレクトリ
+	- `result_{save_model_name}.jsonl` の出力先ディレクトリ
 - `--max-retries` (既定: `3`)
 	- タイムアウト時の再試行回数
 
@@ -101,14 +101,14 @@ python generate.py
 ```bash
 python generate.py \
 	--base-url http://localhost:8000/v1 \
-	--output-dir .qwen3-14b \
+	--output-dir ./qwen3-14b \
 	--max-retries 5
 ```
 
 ### evaluate.py
 基本実行:
 ```bash
-python evaluate.py --result result_{safe_model_name}.jsonl
+python evaluate.py --result result_{save_model_name}.jsonl
 ```
 
 指定可能なオプション:
@@ -129,7 +129,7 @@ python evaluate.py \
 
 ## 出力ファイル
 
-### 生成結果: `result_{safe_model_name}.jsonl`
+### 生成結果: `result_{save_model_name}.jsonl`
 - 作成元: `python generate.py`
 - 形式: JSONL
 - 用途: 各 `data_id` に対するモデルのツール呼び出し出力を保存
@@ -155,7 +155,7 @@ python evaluate.py \
 }
 ```
 
-### 評価サマリ: `score_{safe_model_name}.json`
+### 評価サマリ: `score_{save_model_name}.json`
 - 作成元: `python evaluate.py --result ...`
 - 形式: JSONL
 - 行数: 5行固定
@@ -206,7 +206,7 @@ python evaluate.py \
   - call の比較は集合ベースのため、順序差は不問
 - 何を見る指標か: 実際のツール呼び出し内容（関数名・引数）をどれだけ正確に出せるか
 
-### 誤答ログ: `incorrect_{safe_model_name}.json`
+### 誤答ログ: `incorrect_{save_model_name}.json`
 - 作成元: `python evaluate.py --result ...`
 - 形式: JSONL
 - 用途: 誤答ケースを1行1JSONで保存
