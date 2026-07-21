@@ -7,13 +7,13 @@ import httpx
 from openai import APITimeoutError, OpenAI
 
 
-def load_tools(file_path):
+def load_tools(file_path: Path):
     """ツール定義JSONを読み込む
 
     JMultiWOZを元に定義したツールを格納したJSONファイルを読み込み，その内容を返す．
 
     Args:
-        tools_path (Path): ツールJSONファイルのパス．
+        file_path (Path): ツールJSONファイルのパス．
     Returns:
         list: ツール定義のリスト．
     """
@@ -22,7 +22,7 @@ def load_tools(file_path):
     return data
 
 
-def load_jsonl(file_path):
+def load_jsonl(file_path: Path):
     """JSONLを行単位で読み込む
 
     JSONLファイルを1行=1レコードとして読み込み、各行のJSONを配列として返す．
