@@ -304,7 +304,7 @@ def process_item(
         else []
     )
     try:
-        serhializable_tool_calls = serialize_tool_calls(tool_calls)
+        serializable_tool_calls = serialize_tool_calls(tool_calls)
     except (json.JSONDecodeError, ValueError) as e:
         llm_rec = build_error_record(data_id, dialogue_id, f"{type(e).__name__}: {e}")
         append_jsonl_record(output_path, llm_rec)
