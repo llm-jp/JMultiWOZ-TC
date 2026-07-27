@@ -170,7 +170,7 @@ def output_with_retries(
             time.sleep(2)
             attempt += 1
         except Exception as e:
-            if not converted_for_single_tool_call and is_single_tool_call_error(e):
+            if not converted_for_single_tool_call:
                 print(
                     "[Retry] このモデルは1メッセージ内の複数tool_callsに対応していないため、"
                     f"該当ターンを交互形式に変換して再試行します: {e}"
