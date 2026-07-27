@@ -92,20 +92,6 @@ def load_existing_data_ids(output_path: Path) -> set:
     return existing_ids
 
 
-def is_single_tool_call_error(e: Exception) -> bool:
-    """モデルが1メッセージ内の複数tool_callsに対応していないエラーかどうかを判定する
-
-    Llamaなど一部のモデルは、1つのassistantメッセージにtool_callsを複数まとめると
-    「This model only supports single tool-calls at once!」のようなエラーを返す。
-
-    Args:
-        e (Exception): 発生した例外。
-
-    Returns:
-        bool: 該当のエラーであれば True。
-    """
-    raise NotImplementedError()
-
 def split_batched_tool_calls_in_messages(messages: list) -> list:
     """1メッセージにまとめたtool_callsを1呼び出しずつの交互形式に変換する
 
