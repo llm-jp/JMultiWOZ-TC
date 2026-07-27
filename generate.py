@@ -158,7 +158,7 @@ def output_with_retries(
         except Exception as e:
             if not converted_for_single_tool_call:
                 print(
-                    "[Retry] このモデルは1メッセージ内の複数tool_callsに対応していないため、"
+                    "[Retry] このモデルは1メッセージ内の複数tool_callsに対応していない可能性があるため、"
                     f"該当ターンを交互形式に変換して再試行します: {e}"
                 )
                 current_messages = split_batched_tool_calls_in_messages(messages)
