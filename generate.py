@@ -105,7 +105,41 @@ def split_batched_tool_calls_in_messages(messages: list) -> list:
     Returns:
         list[dict]: 変換後のメッセージ配列。
     """
-    raise NotImplementedError()
+    new_messages = []
+    i = 0
+    n = len(messages)
+    while i < n:
+        m = messages[i]
+        tool_calls = m.get("tool_calls") if isinstance(m, dict) else None
+        if (
+            isinstance(m, dict)
+            and m.get("role") == "assistant"
+            and isinstance(tool_calls, list)
+            and len(tool_calls) > 1
+        ):
+            call_ids = [tc.get("id") for tc in tool_calls]
+            results_by_id = {}
+            j = i + 1
+            while (
+                j < n
+                and messages[j].get("role") == "tool"
+                and messages[j].get("tool_call_id") in call_ids
+            ):
+                results_by_id[messages[j]["tool_call_id"]] = messages[j]
+                j += 1
+            for tc in tool_calls:
+                new_messages.append(
+                    {"role": "assistant", "content": None, "tool_calls": [tc]}
+                )
+                res = results_by_id.get(tc.get("id"))
+                if res is not None:
+                    new_messages.append(res)
+            i = j
+        else:
+            new_messages.append(m)
+            i += 1
+    return new_messages
+
 
 
 def output_with_retries(
