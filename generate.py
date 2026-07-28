@@ -92,6 +92,22 @@ def load_existing_data_ids(output_path: Path) -> set:
     return existing_ids
 
 
+def split_batched_tool_calls_in_messages(messages: list) -> list:
+    """1メッセージにまとめたtool_callsを1呼び出しずつの交互形式に変換する
+
+    [a・b呼び出しをまとめた1つのassistantメッセージ]→[aの結果]→[bの結果] という形式を、
+    [a呼び出し]→[aの結果]→[b呼び出し]→[bの結果] の順に1件ずつ交互に並ぶ形式へ変換する。
+    1メッセージ内の複数tool_callsに対応していないモデル向けのフォールバックとして使用する。
+
+    Args:
+        messages (list[dict]): 変換対象のメッセージ配列。
+
+    Returns:
+        list[dict]: 変換後のメッセージ配列。
+    """
+    raise NotImplementedError()
+
+
 def output_with_retries(
     client: OpenAI,
     model_name: str,
@@ -103,6 +119,10 @@ def output_with_retries(
 
     タイムアウト(APITimeoutError/httpx.ReadTimeout)時に最大max_retries回まで再試行し、
     最初に成功したレスポンスを返す。
+
+    モデルが1メッセージ内の複数tool_callsに対応していないエラーが発生した場合は、
+    該当ターンを1呼び出しずつの交互形式に変換したうえで再試行する
+    (この変換による再試行は max_retries の消費に含めない)。
 
     Args:
         client (OpenAI): 使用するOpenAIクライアントインスタンス。
@@ -117,11 +137,14 @@ def output_with_retries(
     """
     error = None
     response = None
-    for attempt in range(1, max_retries + 1):
+    current_messages = messages
+    converted_for_single_tool_call = False
+    attempt = 1
+    while attempt <= max_retries:
         try:
             response = client.chat.completions.create(
                 model=model_name,
-                messages=messages,
+                messages=current_messages,
                 tools=tools,
                 tool_choice="auto",
             )
@@ -131,7 +154,16 @@ def output_with_retries(
             if attempt == max_retries:
                 error = "TimeoutError"
             time.sleep(2)
+            attempt += 1
         except Exception as e:
+            if not converted_for_single_tool_call:
+                print(
+                    "[Retry] このモデルは1メッセージ内の複数tool_callsに対応していない可能性があるため、"
+                    f"該当ターンを交互形式に変換して再試行します: {e}"
+                )
+                current_messages = split_batched_tool_calls_in_messages(messages)
+                converted_for_single_tool_call = True
+                continue
             print(f"[Error] LLM実行中にエラーが発生しました: {e}")
             error = f"Exception: {e}"
             break
