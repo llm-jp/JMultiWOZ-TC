@@ -105,39 +105,38 @@ def split_batched_tool_calls_in_messages(messages: list) -> list:
     Returns:
         list[dict]: 変換後のメッセージ配列。
     """
+    results_by_id = {}
+    for m in messages:
+        if isinstance(m, dict) and m.get("role") == "tool":
+            results_by_id[m.get("tool_call_id")] = m
+    consumed_ids = set()
     new_messages = []
-    i = 0
-    n = len(messages)
-    while i < n:
-        m = messages[i]
+    for m in messages:
         tool_calls = m.get("tool_calls") if isinstance(m, dict) else None
-        if (
+        is_batched_call = (
             isinstance(m, dict)
             and m.get("role") == "assistant"
             and isinstance(tool_calls, list)
             and len(tool_calls) > 1
-        ):
-            call_ids = [tc.get("id") for tc in tool_calls]
-            results_by_id = {}
-            j = i + 1
-            while (
-                j < n
-                and messages[j].get("role") == "tool"
-                and messages[j].get("tool_call_id") in call_ids
-            ):
-                results_by_id[messages[j]["tool_call_id"]] = messages[j]
-                j += 1
+        )
+        if is_batched_call:
             for tc in tool_calls:
                 new_messages.append(
                     {"role": "assistant", "content": None, "tool_calls": [tc]}
                 )
-                res = results_by_id.get(tc.get("id"))
+                call_id = tc.get("id")
+                res = results_by_id.get(call_id)
                 if res is not None:
                     new_messages.append(res)
-            i = j
+                    consumed_ids.add(call_id)
+        elif (
+            isinstance(m, dict)
+            and m.get("role") == "tool"
+            and m.get("tool_call_id") in consumed_ids
+        ):
+            continue
         else:
             new_messages.append(m)
-            i += 1
     return new_messages
 
 

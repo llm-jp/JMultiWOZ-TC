@@ -1,49 +1,4 @@
-def split_batched_tool_calls_in_messages(messages: list) -> list:
-    """1メッセージにまとめたtool_callsを1呼び出しずつの交互形式に変換する
-
-    [a・b呼び出しをまとめた1つのassistantメッセージ]→[aの結果]→[bの結果] という形式を、
-    [a呼び出し]→[aの結果]→[b呼び出し]→[bの結果] の順に1件ずつ交互に並ぶ形式へ変換する。
-    1メッセージ内の複数tool_callsに対応していないモデル向けのフォールバックとして使用する。
-
-    Args:
-        messages (list[dict]): 変換対象のメッセージ配列。
-
-    Returns:
-        list[dict]: 変換後のメッセージ配列。
-    """
-    results_by_id = {}
-    for m in messages:
-        if isinstance(m, dict) and m.get("role") == "tool":
-            results_by_id[m.get("tool_call_id")] = m
-    consumed_ids = set()
-    new_messages = []
-    for m in messages:
-        tool_calls = m.get("tool_calls") if isinstance(m, dict) else None
-        is_batched_call = (
-            isinstance(m, dict)
-            and m.get("role") == "assistant"
-            and isinstance(tool_calls, list)
-            and len(tool_calls) > 1
-        )
-        if is_batched_call:
-            for tc in tool_calls:
-                new_messages.append(
-                    {"role": "assistant", "content": None, "tool_calls": [tc]}
-                )
-                call_id = tc.get("id")
-                res = results_by_id.get(call_id)
-                if res is not None:
-                    new_messages.append(res)
-                    consumed_ids.add(call_id)
-        elif (
-            isinstance(m, dict)
-            and m.get("role") == "tool"
-            and m.get("tool_call_id") in consumed_ids
-        ):
-            continue
-        else:
-            new_messages.append(m)
-    return new_messages
+from generate import split_batched_tool_calls_in_messages
 
 
 def test_split_batched_tool_calls_in_messages():
@@ -51,43 +6,43 @@ def test_split_batched_tool_calls_in_messages():
     messages = [
         {
             "role": "user",
-            "content": "1",
+            "content": "CONTENT1",
         },
         {
             "role": "assistant",
             "content": None,
             "tool_calls": [
                 {
-                    "id": "1",
+                    "id": "ID1",
                     "type": "function",
                     "function": {
-                        "name": "Search_taxi",
-                        "arguments": '{"name": "1", "cashless": "対応", "jumbo": "対応", "city": "1"}',
+                        "name": "TOOL1",
+                        "arguments": '{"name": "NAME1", "cashless": "対応", "jumbo": "対応", "city": "CITY1"}',
                     },
                 },
                 {
-                    "id": "2",
+                    "id": "ID2",
                     "type": "function",
                     "function": {
-                        "name": "Booking_taxi",
-                        "arguments": '{"departurepoint": "1", "arrivalpoint": "1", "name": "1", "city": "1", "month": 3, "day": 21, "hour": 11, "minute": 30}',
+                        "name": "TOOL2",
+                        "arguments": '{"departurepoint": "DEPATTUREPOINT1", "arrivalpoint": "ARRAIVALPOINT1", "name": "NAME1", "city": "CITY1", "month": 3, "day": 21, "hour": 11, "minute": 30}',
                     },
                 },
             ],
         },
         {
             "role": "tool",
-            "tool_call_id": "1",
-            "content": '{"active_entity": {"city": "1", "name": "1", "cashless": "対応", "jumbo": "対応", "phone": "1", "domain": "taxi"}}',
+            "tool_call_id": "ID1",
+            "content": '{"active_entity": {"city": "CITY1", "name": "NAME1", "cashless": "対応", "jumbo": "対応", "phone": "PHONE1", "domain": "DOMAIN1"}}',
         },
         {
             "role": "tool",
-            "tool_call_id": "2",
+            "tool_call_id": "ID2",
             "content": '{"success": false, "ref": null}',
         },
         {
             "role": "assistant",
-            "content": "1",
+            "content": "CONTENT1",
         },
     ]
 
@@ -98,48 +53,48 @@ def test_split_batched_tool_calls_in_messages():
     assert result == [
         {
             "role": "user",
-            "content": "1",
+            "content": "CONTENT1",
         },
         {
             "role": "assistant",
             "content": None,
             "tool_calls": [
                 {
-                    "id": "1",
+                    "id": "ID1",
                     "type": "function",
                     "function": {
-                        "name": "Search_taxi",
-                        "arguments": '{"name": "1", "cashless": "対応", "jumbo": "対応", "city": "1"}',
+                        "name": "TOOL1",
+                        "arguments": '{"name": "NAME1", "cashless": "対応", "jumbo": "対応", "city": "CITY1"}',
                     },
                 }
             ],
         },
         {
             "role": "tool",
-            "tool_call_id": "1",
-            "content": '{"active_entity": {"city": "1", "name": "1", "cashless": "対応", "jumbo": "対応", "phone": "1", "domain": "taxi"}}',
+            "tool_call_id": "ID1",
+            "content": '{"active_entity": {"city": "CITY1", "name": "NAME1", "cashless": "対応", "jumbo": "対応", "phone": "PHONE1", "domain": "DOMAIN1"}}',
         },
         {
             "role": "assistant",
             "content": None,
             "tool_calls": [
                 {
-                    "id": "2",
+                    "id": "ID2",
                     "type": "function",
                     "function": {
-                        "name": "Booking_taxi",
-                        "arguments": '{"departurepoint": "1", "arrivalpoint": "1", "name": "1", "city": "1", "month": 3, "day": 21, "hour": 11, "minute": 30}',
+                        "name": "TOOL2",
+                        "arguments": '{"departurepoint": "DEPATTUREPOINT1", "arrivalpoint": "ARRAIVALPOINT1", "name": "NAME1", "city": "CITY1", "month": 3, "day": 21, "hour": 11, "minute": 30}',
                     },
                 }
             ],
         },
         {
             "role": "tool",
-            "tool_call_id": "2",
+            "tool_call_id": "ID2",
             "content": '{"success": false, "ref": null}',
         },
         {
             "role": "assistant",
-            "content": "1",
+            "content": "CONTENT1",
         },
     ]
