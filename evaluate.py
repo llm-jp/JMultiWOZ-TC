@@ -1,7 +1,8 @@
-import json
 import argparse
+import json
 import re
 from pathlib import Path
+
 from generate import load_jsonl
 
 
@@ -24,7 +25,6 @@ def canonicalize_arguments(args: dict):
         str: 正規化された引数の文字列表現。
     """
     return json.dumps(args, sort_keys=True, ensure_ascii=False)
-
 
 
 def normalize_tool_calls(tool_calls):
@@ -60,7 +60,6 @@ def normalize_tool_calls(tool_calls):
     return set(normalized)
 
 
-
 def build_question_and_dialogue_maps(input_path: Path):
     """質問・ダイアログIDのマップ作成
 
@@ -91,7 +90,6 @@ def build_question_and_dialogue_maps(input_path: Path):
     return data_id2question, data_id2dialogue_id
 
 
-
 def build_ground_truth_map(ground_items: list):
     """正解データのマップ作成
 
@@ -109,7 +107,6 @@ def build_ground_truth_map(ground_items: list):
         key = item.get("data_id")
         data_id2ground_truth[key] = item.get("ground_truth", [])
     return data_id2ground_truth
-
 
 
 def aggregate_overall_metrics(
@@ -172,8 +169,10 @@ def aggregate_overall_metrics(
                 {
                     "data_id": data_id,
                     "dialogue_id": dlg_id,
-                    "Incorrect_genre": incorrect_genre,
-                    "question": data_id2question.get(data_id) if data_id2question else None,
+                    "incorrect_genre": incorrect_genre,
+                    "question": data_id2question.get(data_id)
+                    if data_id2question
+                    else None,
                     "output": output_calls,
                     "ground_truth": ground_truth_calls,
                 }
@@ -191,12 +190,15 @@ def aggregate_overall_metrics(
         "acc": acc,
     }
 
-
     return stats, incorrect_logs
 
 
-
-def aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,):
+def aggregate_tool_usage_metrics(
+    result_data,
+    data_id2ground_truth,
+    data_id2question,
+    data_id2dialogue_id,
+):
     """ツール使用/不使用判断の集計
 
     全レコードを走査し、正解がツール使用か不使用かで分けて評価する。
@@ -350,8 +352,7 @@ def aggregate_tool_call_metrics(
               tool call 精度が不一致だったケースの誤答ログ配列。
     """
     filtered_data = [
-        rec for rec in result_data
-        if data_id2ground_truth.get(rec.get("data_id"), [])
+        rec for rec in result_data if data_id2ground_truth.get(rec.get("data_id"), [])
     ]
 
     func_stats, incorrect_call_precision = aggregate_overall_metrics(
@@ -363,14 +364,17 @@ def aggregate_tool_call_metrics(
     )
 
     incorrect_call_precision = [
-        bad for bad in incorrect_call_precision
+        bad
+        for bad in incorrect_call_precision
         if normalize_tool_calls(bad.get("output", []))
     ]
 
     return func_stats, incorrect_call_precision
 
 
-def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id):
+def evaluate_results(
+    result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
+):
     """結果比較とメトリクス集計
 
     LLM出力と正解データを比較し、各種指標(全体/使用判断/不使用判断/合算/tool call精度)を集計して返す。
@@ -395,7 +399,17 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
 
     overall_stats, _ = aggregate_overall_metrics(result_data, data_id2ground_truth)
 
-    (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement,) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,)
+    (
+        use_stats,
+        nouse_stats,
+        incorrect_use_judgement,
+        incorrect_nouse_judgement,
+    ) = aggregate_tool_usage_metrics(
+        result_data,
+        data_id2ground_truth,
+        data_id2question,
+        data_id2dialogue_id,
+    )
 
     # use_stats と nouse_stats を統合して use_or_nouse_stats を計算
     use_or_nouse_total = use_stats["total"] + nouse_stats["total"]
@@ -403,7 +417,11 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
     use_or_nouse_correct = use_stats["correct"] + nouse_stats["correct"]
     use_or_nouse_incorrect = use_stats["incorrect"] + nouse_stats["incorrect"]
     use_or_nouse_evaluated = use_or_nouse_total - use_or_nouse_error
-    use_or_nouse_acc = use_or_nouse_correct / use_or_nouse_evaluated * 100 if use_or_nouse_evaluated > 0 else 0
+    use_or_nouse_acc = (
+        use_or_nouse_correct / use_or_nouse_evaluated * 100
+        if use_or_nouse_evaluated > 0
+        else 0
+    )
 
     use_or_nouse_stats = {
         "total": use_or_nouse_total,
@@ -435,7 +453,6 @@ def evaluate_results(result_data, data_id2ground_truth, data_id2question, data_i
         incorrect_use_judgement,
         incorrect_nouse_judgement,
     )
-
 
 
 def write_summary(
@@ -511,7 +528,7 @@ def write_summary(
             "出力ミスのデータ数": call["error"],
             "全体の正答率(%)": call["acc"],
         }
-        
+
         out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
         out_f.write(json.dumps(used_summary, ensure_ascii=False) + "\n")
         out_f.write(json.dumps(unused_summary, ensure_ascii=False) + "\n")
@@ -557,7 +574,6 @@ def write_incorrect_logs(
             out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
 
 
-
 def print_summary_to_console(accuracies: dict):
     """要約をコンソール出力
 
@@ -581,15 +597,24 @@ def print_summary_to_console(accuracies: dict):
     use_or_nouse = accuracies["use_or_nouse"]
     call = accuracies["call"]
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("評価結果(要約)")
-    print(f"{'='*80}")
-    print(f"全体: 総{overall['total']} / 対象{overall['evaluated']} / ミス{overall['error']} / 正答率{overall['acc']:.2f}%")
-    print(f"ツール使用判断: 総{used['total']} / 対象{used['evaluated']} / ミス{used['error']} / 正答率{used['acc']:.2f}%")
-    print(f"ツール不使用判断: 総{unused['total']} / 対象{unused['evaluated']} / ミス{unused['error']} / 正答率{unused['acc']:.2f}%")
-    print(f"ツール使用・不使用判断: 総{use_or_nouse['total']} / 対象{use_or_nouse['evaluated']} / ミス{use_or_nouse['error']} / 正答率{use_or_nouse['acc']:.2f}%")
-    print(f"tool call精度: 総{call['total']} / 対象{call['evaluated']} / ミス{call['error']} / 正答率{call['acc']:.2f}%")
-
+    print(f"{'=' * 80}")
+    print(
+        f"全体: 総{overall['total']} / 対象{overall['evaluated']} / ミス{overall['error']} / 正答率{overall['acc']:.2f}%"
+    )
+    print(
+        f"ツール使用判断: 総{used['total']} / 対象{used['evaluated']} / ミス{used['error']} / 正答率{used['acc']:.2f}%"
+    )
+    print(
+        f"ツール不使用判断: 総{unused['total']} / 対象{unused['evaluated']} / ミス{unused['error']} / 正答率{unused['acc']:.2f}%"
+    )
+    print(
+        f"ツール使用・不使用判断: 総{use_or_nouse['total']} / 対象{use_or_nouse['evaluated']} / ミス{use_or_nouse['error']} / 正答率{use_or_nouse['acc']:.2f}%"
+    )
+    print(
+        f"tool call精度: 総{call['total']} / 対象{call['evaluated']} / ミス{call['error']} / 正答率{call['acc']:.2f}%"
+    )
 
 
 def main():
@@ -633,7 +658,7 @@ def main():
     write_summary(summary_path, accuracies)
     write_incorrect_logs(incorrect_path, log_call, log_use, log_nouse)
     print_summary_to_console(accuracies)
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print(f"評価結果(サマリー)を書き出しました: {summary_path}")
     print(f"評価結果(誤答ログ)を書き出しました: {incorrect_path}")
 
