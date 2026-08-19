@@ -1,6 +1,8 @@
 import argparse
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import httpx
@@ -333,10 +335,13 @@ def process_item(
     model_name: str,
     output_path: Path,
     max_retries: int,
+    write_lock: threading.Lock,
 ):
     """1レコードを処理して出力まで行う
 
     1件の入力に対して、LLM出力の実行→ツール呼び出しの整形→出力JSONLへの追記までを行う。
+    複数スレッドから並行に呼ばれる想定のため、出力ファイルへの書き込みとログ出力は
+    write_lock で保護し、LLM呼び出し(ネットワークI/O)自体はロックの外で行う。
 
     Args:
         item (dict): 入力レコード。
@@ -345,6 +350,7 @@ def process_item(
         model_name (str): 使用するモデル名。
         output_path (Path): 出力JSONLのパス。
         max_retries (int): タイムアウト時の最大再試行回数。
+        write_lock (threading.Lock): 出力ファイル書き込みとログ出力を排他制御するロック。
 
     Returns:
         None: なし。
@@ -359,8 +365,9 @@ def process_item(
 
     if error is not None:
         llm_rec = build_error_record(data_id, dialogue_id, error)
-        append_jsonl_record(output_path, llm_rec)
-        print("-" * 80)
+        with write_lock:
+            append_jsonl_record(output_path, llm_rec)
+            print("-" * 80)
         return
 
     tool_calls = (
@@ -372,18 +379,20 @@ def process_item(
         serializable_tool_calls = serialize_tool_calls(tool_calls)
     except (json.JSONDecodeError, ValueError) as e:
         llm_rec = build_error_record(data_id, dialogue_id, f"{type(e).__name__}: {e}")
-        append_jsonl_record(output_path, llm_rec)
-        print("-" * 80)
+        with write_lock:
+            append_jsonl_record(output_path, llm_rec)
+            print("-" * 80)
         return
-    log_tool_calls(serializable_tool_calls)
 
     llm_rec = build_success_record(
         data_id,
         dialogue_id,
         serializable_tool_calls,
     )
-    append_jsonl_record(output_path, llm_rec)
-    print("-" * 80)
+    with write_lock:
+        log_tool_calls(serializable_tool_calls)
+        append_jsonl_record(output_path, llm_rec)
+        print("-" * 80)
 
 
 def main():
@@ -424,6 +433,12 @@ def main():
         default=3,
         help="タイムアウト時の最大再試行回数を指定",
     )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=4,
+        help="同時に実行するリクエスト数を指定",
+    )
 
     args = parser.parse_args()
 
@@ -438,24 +453,34 @@ def main():
     existing_ids = load_existing_data_ids(output_path)
 
     total = len(input_data)
-    print(f"評価開始: {total}件のデータを実行します\n")
+    pending_items = [
+        item for item in input_data if item.get("data_id") not in existing_ids
+    ]
+    skipped = total - len(pending_items)
+    print(
+        f"評価開始: {total}件中{len(pending_items)}件を実行します"
+        f"(既存結果によるスキップ: {skipped}件, 並列数: {args.batch_size})\n"
+    )
 
-    for idx, item in enumerate(input_data, 1):
-        data_id = item.get("data_id")
-        print(f"[{idx}/{total}] ID: {data_id}")
-        if data_id in existing_ids:
-            print("→ 既存結果ありのためスキップ")
-            print("-" * 80)
-            continue
-
-        process_item(
-            item,
-            tools,
-            client,
-            model_name,
-            output_path,
-            args.max_retries,
-        )
+    write_lock = threading.Lock()
+    with ThreadPoolExecutor(max_workers=args.batch_size) as executor:
+        futures = {
+            executor.submit(
+                process_item,
+                item,
+                tools,
+                client,
+                model_name,
+                output_path,
+                args.max_retries,
+                write_lock,
+            ): item
+            for item in pending_items
+        }
+        for completed, future in enumerate(as_completed(futures), 1):
+            item = futures[future]
+            future.result()
+            print(f"[{completed}/{len(pending_items)}] 完了: {item.get('data_id')}")
 
     print(f"出力結果のJSONLを書き出しました: {output_path}\n")
 
