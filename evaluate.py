@@ -2,8 +2,102 @@ import argparse
 import json
 import re
 from pathlib import Path
-
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from generate import load_jsonl
+
+
+DEFAULT_JUDGE_MODEL_PATH = "models/qwen3.5-9b"
+DEFAULT_JUDGE_MAX_NEW_TOKENS = 16
+
+JUDGE_KEYS = {"area", "station", "genre", "name", "arrivalpoint", "departurepoint"}
+
+ADDRESS_DB_FILES = {
+    "restaurant": "database/restaurant_db.json",
+    "hotel": "database/hotel_db.json",
+    "attraction": "database/attraction_db.json",
+    "shopping": "database/shopping_db.json",
+}
+
+_ADDRESS_INDEX = None
+
+JUDGE_BASE_INSTRUCTION = """あなたは、日本の観光・宿泊・飲食店・タクシーに関する対話システムのfunction calling結果を評価するジャッジです。
+正解値とモデル出力値の2つの引数値が、表記のゆれや言い回しの違いを除いて実質的に同一の対象を指しているかどうかだけを判定してください。
+指している対象そのものが異なる場合は不一致と判定してください。
+回答は<answer>true</answer>か<answer>false</answer>のみで回答してください。"""
+
+JUDGE_KEY_GUIDANCE = {
+    "name": """この引数は、レストラン・ホテル・観光施設・ショップ・タクシー会社などの固有の施設名/事業者名です。
+- 全角/半角、スペースの有無、記号(<>【】など)の違いは同一とみなしてよい
+- 「株式会社」「(株)」「有限会社」などの法人格表記の有無・省略は同一とみなしてよい
+- 「店」「様」などの付随表記の有無は同一とみなしてよい
+- 正式名称と広く知られた通称・略称は同一とみなしてよい
+- 同じ系列でも支店・店舗が異なる場合は不一致と判定してください
+- 一部の文字が異なるだけの別の施設名(例:「ホテルAAA」と「ホテルBBB」)は不一致と判定してください""",
+
+    "area": """この引数は、施設が所在する地域(区・町名・エリア名など)です。
+- 「〜周辺」「〜エリア」などの付随表現の有無は同一とみなしてよい
+- 表記の粒度が異なるだけで指している地域が同じ場合(例:「下京区」と「下京区七条」)は同一とみなしてよい
+- 明らかに異なる地域・行政区を指す場合は不一致と判定してください""",
+
+    "station": """この引数は、施設の最寄りの鉄道・地下鉄の駅名です。
+- 「駅」の有無、路線名の併記有無は同一とみなしてよい
+- 同じ駅を指す通称・略称は同一とみなしてよい
+- 異なる駅、または同名でも異なる路線上の別駅を指す場合は不一致と判定してください""",
+
+    "genre": """この引数は、あらかじめ定義された選択肢の中から選ばれるジャンル/カテゴリです。
+- 同じカテゴリを指す同義語・言い換え(例:「和食」と「日本料理」)は同一とみなしてよい
+- 表記ゆれ(送り仮名、括弧の有無など)は同一とみなしてよい
+- 明らかに異なるカテゴリを指す場合は不一致と判定してください""",
+
+    "arrivalpoint": """この引数は、タクシーの目的地(到着地点)となる施設名や場所です。
+- 全角/半角、スペース、記号の違い、法人格表記や付随表記の有無は同一とみなしてよい
+- 同じ場所を指す通称・略称・正式名称の違いは同一とみなしてよい
+- モデル出力値が施設名ではなく住所(番地など)で表現されている場合、「正解施設の住所(参考情報)」が与えられていればそれと一致するかどうかで、同じ場所を指しているか判定してください
+- 異なる施設・場所を指す場合は不一致と判定してください""",
+
+    "departurepoint": """この引数は、タクシーの出発地点となる施設名や場所です。
+- 全角/半角、スペース、記号の違い、法人格表記や付随表記の有無は同一とみなしてよい
+- 同じ場所を指す通称・略称・正式名称の違いは同一とみなしてよい
+- モデル出力値が施設名ではなく住所(番地など)で表現されている場合、「正解施設の住所(参考情報)」が与えられていればそれと一致するかどうかで、同じ場所を指しているか判定してください
+- 異なる施設・場所を指す場合は不一致と判定してください""",
+}
+
+
+class NullJudge:
+    """LLM-as-a-judgeを使用しない場合のダミー実装(常に不一致扱い)"""
+
+    def equivalent(
+        self, 
+        tool_name, 
+        key, 
+        gt_value, 
+        out_value, 
+        city=None
+    ) -> bool:
+        raise NotImplementedError()
+
+
+class LLMJudge:
+    """LLM-as-a-judgeによるあいまい一致判定(ローカルモデル・キャッシュ付き)
+
+    `transformers` でモデルをロードしてプロセス内で直接推論する。
+    """
+
+    def __init__(
+        self, 
+        model_path: str, 
+        device_map="auto", 
+        torch_dtype=None, 
+        max_new_tokens=DEFAULT_JUDGE_MAX_NEW_TOKENS, 
+        cache_path=None
+    ):
+        raise NotImplementedError()
+
+    def equivalent(
+        self, tool_name, key, gt_value, out_value, city=None
+    ) -> bool:
+        raise NotImplementedError()
 
 
 def canonicalize_arguments(args: dict):
@@ -58,6 +152,71 @@ def normalize_tool_calls(tool_calls):
         normalized.append((name, args_canonical))
 
     return set(normalized)
+
+
+def arguments_match(
+    tool_name, 
+    gt_args, 
+    out_args, 
+    judge, 
+    judge_log=None
+) -> bool:
+    """1つのツール呼び出しの引数辞書同士が一致するか判定する
+
+    キー集合が異なる場合は不一致とする。キーが一致する場合のみ、
+    各キーの値を `values_match` で比較する。
+
+    Args:
+        tool_name (str): 対象のツール名。
+        gt_args (dict): 正解の引数辞書。
+        out_args (dict): モデル出力の引数辞書。
+        judge: `NullJudge` または `LLMJudge` のインスタンス。
+        judge_log (list | None): `values_match` へそのまま引き継ぐログ配列。
+
+    Returns:
+        bool: 一致とみなせる場合True。
+    """
+    raise NotImplementedError()
+
+
+def tool_calls_match(
+    output_calls, 
+    ground_truth_calls, 
+    judge, 
+    judge_log=None
+) -> bool:
+    """ツール呼び出し配列同士が一致するか判定する
+
+    JMultiWOZ-TC の ground_truth 内でツール名が重複しないことを前提に、
+    ツール名をキーとして対応する呼び出し同士の引数を比較する。
+    呼び出されたツール名の集合が異なる場合は不一致とする。
+
+    Args:
+        output_calls (list[dict]): モデル出力のツール呼び出し配列。
+        ground_truth_calls (list[dict]): 正解のツール呼び出し配列。
+        judge: `NullJudge` または `LLMJudge` のインスタンス。
+        judge_log (list | None): `values_match` へそのまま引き継ぐログ配列。
+
+    Returns:
+        bool: 一致とみなせる場合True。
+    """
+    def to_name_map(calls):
+        result = {}
+        for call in calls or []:
+            if isinstance(call, dict) and call.get("name") is not None:
+                result[call["name"]] = call.get("arguments")
+        return result
+
+    gt_by_name = to_name_map(ground_truth_calls)
+    out_by_name = to_name_map(output_calls)
+
+    if set(gt_by_name.keys()) != set(out_by_name.keys()):
+        return False
+
+    return all(
+        arguments_match(name, gt_args, out_by_name[name], judge, judge_log=judge_log)
+        for name, gt_args in gt_by_name.items()
+    )
 
 
 def build_question_and_dialogue_maps(input_path: Path):
@@ -115,11 +274,16 @@ def aggregate_overall_metrics(
     data_id2question=None,
     data_id2dialogue_id=None,
     incorrect_genre=None,
+    judge=None,
 ):
     """全体評価の集計
 
     全レコードを走査し、モデル出力の tool call 集合と正解の tool call 集合が
     厳密一致しているかを判定して、全体指標を集計する。
+    一致判定は `tool_calls_match` で実行する。
+    `judge` に `LLMJudge` を渡した場合、
+    `area`,`station`,`genre`,`name`,`arrivalpoint`,`departurepoint` 引数は
+    文字列として完全一致しなくても LLM-as-a-judge が実質的に同一と判定すれば一致扱いとする。
     `error` が入っているレコードは評価対象外として `error` に加算する。
 
     Args:
@@ -128,6 +292,7 @@ def aggregate_overall_metrics(
         data_id2question (dict): `data_id` から質問文を引く辞書。
         data_id2dialogue_id (dict): `data_id` から対話IDを引く辞書。
         incorrect_genre (str): 不正解ログに入れるジャンル名。
+        judge: `NullJudge` または `LLMJudge` のインスタンス。Noneの場合は厳密一致のみで判定する。
 
     Returns:
         tuple: `(stats, incorrect_logs)` の2要素タプル。
@@ -138,13 +303,26 @@ def aggregate_overall_metrics(
                 - incorrect (int): 厳密不一致の件数。
                 - error (int): 出力ミス等により未評価となった件数。
                 - acc (float): 正答率(%)。
+                - judge_rescued (int): 文字列としては不一致だがLLM-as-a-judgeにより一致と判定された件数。
             - incorrect_logs (list): 不正解ケースのログ配列。
+            - judge_correct_logs (list):
+              LLM-as-a-judgeが呼ばれた結果、最終的に正解(一致)と判定されたケースのログ配列。
+              各要素の `judged_fields` に、実際にジャッジへ問い合わせた
+              (`tool_name`,`key`,`gt_value`,`out_value`,`equivalent`) の一覧を含む。
+            - judge_incorrect_logs (list):
+              LLM-as-a-judgeが呼ばれたが、最終的に不正解(不一致)のままだったケースのログ配列。
+              構造は `judge_correct_logs` と同様。
     """
+    judge = judge or NullJudge()
+
     total = len(result_data)
     correct = 0
     incorrect = 0
     error = 0
+    judge_rescued = 0
     incorrect_logs = []
+    judge_correct_logs = []
+    judge_incorrect_logs = []
 
     for rec in result_data:
         data_id = rec.get("data_id")
@@ -157,26 +335,56 @@ def aggregate_overall_metrics(
 
         output_calls_set = normalize_tool_calls(output_calls)
         ground_truth_set = normalize_tool_calls(ground_truth_calls)
+        strict_match = output_calls_set == ground_truth_set
 
-        if output_calls_set == ground_truth_set:
+        dlg_id = rec.get("dialogue_id") or (
+            data_id2dialogue_id.get(data_id) if data_id2dialogue_id else None
+        )
+
+        if strict_match:
             correct += 1
+            continue
+
+        judge_log = []
+        is_match = tool_calls_match(output_calls, ground_truth_calls, judge, judge_log=judge_log)
+
+        if is_match:
+            correct += 1
+            judge_rescued += 1
+            if judge_log:
+                judge_correct_logs.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "judged_fields": judge_log,
+                        "output": output_calls,
+                        "ground_truth": ground_truth_calls,
+                        "question": data_id2question.get(data_id) if data_id2question else None,
+                    }
+                )
         else:
             incorrect += 1
-            dlg_id = rec.get("dialogue_id") or (
-                data_id2dialogue_id.get(data_id) if data_id2dialogue_id else None
-            )
             incorrect_logs.append(
                 {
                     "data_id": data_id,
                     "dialogue_id": dlg_id,
-                    "incorrect_genre": incorrect_genre,
-                    "question": data_id2question.get(data_id)
-                    if data_id2question
-                    else None,
+                    "Incorrect_genre": incorrect_genre,
+                    "question": data_id2question.get(data_id) if data_id2question else None,
                     "output": output_calls,
                     "ground_truth": ground_truth_calls,
                 }
             )
+            if judge_log:
+                judge_incorrect_logs.append(
+                    {
+                        "data_id": data_id,
+                        "dialogue_id": dlg_id,
+                        "judged_fields": judge_log,
+                        "output": output_calls,
+                        "ground_truth": ground_truth_calls,
+                        "question": data_id2question.get(data_id) if data_id2question else None,
+                    }
+                )
 
     evaluated = correct + incorrect
     acc = correct / evaluated * 100 if evaluated > 0 else 0
@@ -188,9 +396,10 @@ def aggregate_overall_metrics(
         "incorrect": incorrect,
         "error": error,
         "acc": acc,
+        "judge_rescued": judge_rescued,
     }
 
-    return stats, incorrect_logs
+    return stats, incorrect_logs, judge_correct_logs, judge_incorrect_logs
 
 
 def aggregate_tool_usage_metrics(
@@ -617,6 +826,22 @@ def print_summary_to_console(accuracies: dict):
     )
 
 
+def build_judge(args):
+    """CLI引数からJudgeインスタンスを構築する
+
+    `--use-judge` が指定されていない場合は `NullJudge` (常に不一致扱い)を返す。
+    指定されている場合は、`--judge-model-path` を `transformers` でロードした
+    `LLMJudge` を返す(HTTP APIは使わずローカルで直接推論する)。
+
+    Args:
+        args (argparse.Namespace): コマンドライン引数。
+
+    Returns:
+        NullJudge | LLMJudge: 判定に使用するJudgeインスタンス。
+    """
+    raise NotImplementedError()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -637,8 +862,33 @@ def main():
         default="jmultiwoz_tc_input.jsonl",
         help="JMultiWOZ-TCに含まれる入力データのファイルパスを指定",
     )
+    parser.add_argument(
+        "--use-judge",
+        action="store_true",
+        help="area/station/genre/name/arrivalpoint/departurepoint の一致判定にLLM-as-a-judgeを使用する",
+    )
+    parser.add_argument(
+        "--judge-model-path",
+        type=str,
+        default=DEFAULT_JUDGE_MODEL_PATH,
+        help="LLM-as-a-judgeに使用するモデルのパス/Hugging Face ID(transformersでローカルにロードして推論する)",
+    )
+    parser.add_argument(
+        "--judge-max-new-tokens",
+        type=int,
+        default=DEFAULT_JUDGE_MAX_NEW_TOKENS,
+        help="LLM-as-a-judgeの生成トークン数上限",
+    )
+    parser.add_argument(
+        "--judge-cache",
+        type=Path,
+        default=None,
+        help="LLM-as-a-judgeの判定結果キャッシュ(JSONL)のパスを指定(未指定時は judge_cache_{judge_model_path}.jsonl)",
+    )
 
     args = parser.parse_args()
+
+    judge = build_judge(args)
 
     result_data = load_jsonl(args.result)
     ground_data = load_jsonl(args.ground)
@@ -646,14 +896,16 @@ def main():
     data_id2question, data_id2dialogue_id = build_question_and_dialogue_maps(args.input)
     data_id2ground_truth = build_ground_truth_map(ground_data)
 
-    accuracies, log_call, log_use, log_nouse = evaluate_results(
-        result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
+    accuracies, log_call, log_use, log_nouse, judge_correct_logs, judge_incorrect_logs = evaluate_results(
+        result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id, judge=judge
     )
 
     m = re.match(r"result_(.+)\.jsonl$", args.result.name)
     save_model_name = m.group(1) if m else "unknown"
     summary_path = Path(f"score_{save_model_name}.json")
     incorrect_path = Path(f"incorrect_{save_model_name}.json")
+    judge_correct_path = Path(f"judge_correct_{save_model_name}.json")
+    judge_incorrect_path = Path(f"judge_incorrect_{save_model_name}.json")
 
     write_summary(summary_path, accuracies)
     write_incorrect_logs(incorrect_path, log_call, log_use, log_nouse)
@@ -661,6 +913,12 @@ def main():
     print(f"{'=' * 80}")
     print(f"評価結果(サマリー)を書き出しました: {summary_path}")
     print(f"評価結果(誤答ログ)を書き出しました: {incorrect_path}")
+    if isinstance(judge, LLMJudge):
+        write_judge_logs(judge_correct_path, judge_correct_logs)
+        write_judge_logs(judge_incorrect_path, judge_incorrect_logs)
+        print(f"LLM-as-a-judgeで正解と判定されたログを書き出しました: {judge_correct_path} ({len(judge_correct_logs)}件)")
+        print(f"LLM-as-a-judgeで不正解と判定されたログを書き出しました: {judge_incorrect_path} ({len(judge_incorrect_logs)}件)")
+        print(f"LLM-as-a-judge 呼び出し回数(キャッシュ未ヒット): {judge.call_count}")
 
 
 if __name__ == "__main__":
