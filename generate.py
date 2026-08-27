@@ -40,7 +40,7 @@ def load_jsonl(file_path: Path):
     return data
 
 
-def get_model_and_safe_name(client) -> tuple[str, str]:
+def get_model_and_save_name(client) -> tuple[str, str]:
     """モデル名の取得
 
     起動したvllmサーバーからモデル名を取得し、
@@ -53,8 +53,8 @@ def get_model_and_safe_name(client) -> tuple[str, str]:
         tuple[str, str]: （モデル名, サニタイズ済みモデル名）。
     """
     model_name = client.models.list().data[0].id
-    safe_model_name = model_name.replace("/", "_")
-    return model_name, safe_model_name
+    save_model_name = model_name.replace("/", "_")
+    return model_name, save_model_name
 
 
 def load_existing_data_ids(output_path: Path) -> set:
@@ -92,6 +92,55 @@ def load_existing_data_ids(output_path: Path) -> set:
     return existing_ids
 
 
+def split_batched_tool_calls_in_messages(messages: list) -> list:
+    """1メッセージにまとめたtool_callsを1呼び出しずつの交互形式に変換する
+
+    [a・b呼び出しをまとめた1つのassistantメッセージ]→[aの結果]→[bの結果] という形式を、
+    [a呼び出し]→[aの結果]→[b呼び出し]→[bの結果] の順に1件ずつ交互に並ぶ形式へ変換する。
+    1メッセージ内の複数tool_callsに対応していないモデル向けのフォールバックとして使用する。
+
+    Args:
+        messages (list[dict]): 変換対象のメッセージ配列。
+
+    Returns:
+        list[dict]: 変換後のメッセージ配列。
+    """
+    results_by_id = {}
+    for m in messages:
+        if isinstance(m, dict) and m.get("role") == "tool":
+            results_by_id[m.get("tool_call_id")] = m
+    consumed_ids = set()
+    new_messages = []
+    for m in messages:
+        tool_calls = m.get("tool_calls") if isinstance(m, dict) else None
+        is_batched_call = (
+            isinstance(m, dict)
+            and m.get("role") == "assistant"
+            and isinstance(tool_calls, list)
+            and len(tool_calls) > 1
+        )
+        if is_batched_call:
+            for tc in tool_calls:
+                new_messages.append(
+                    {"role": "assistant", "content": None, "tool_calls": [tc]}
+                )
+                call_id = tc.get("id")
+                res = results_by_id.get(call_id)
+                if res is not None:
+                    new_messages.append(res)
+                    consumed_ids.add(call_id)
+        elif (
+            isinstance(m, dict)
+            and m.get("role") == "tool"
+            and m.get("tool_call_id") in consumed_ids
+        ):
+            continue
+        else:
+            new_messages.append(m)
+    return new_messages
+
+
+
 def output_with_retries(
     client: OpenAI,
     model_name: str,
@@ -103,6 +152,10 @@ def output_with_retries(
 
     タイムアウト(APITimeoutError/httpx.ReadTimeout)時に最大max_retries回まで再試行し、
     最初に成功したレスポンスを返す。
+
+    モデルが1メッセージ内の複数tool_callsに対応していないエラーが発生した場合は、
+    該当ターンを1呼び出しずつの交互形式に変換したうえで再試行する
+    (この変換による再試行は max_retries の消費に含めない)。
 
     Args:
         client (OpenAI): 使用するOpenAIクライアントインスタンス。
@@ -117,11 +170,14 @@ def output_with_retries(
     """
     error = None
     response = None
-    for attempt in range(1, max_retries + 1):
+    current_messages = messages
+    converted_for_single_tool_call = False
+    attempt = 1
+    while attempt <= max_retries:
         try:
             response = client.chat.completions.create(
                 model=model_name,
-                messages=messages,
+                messages=current_messages,
                 tools=tools,
                 tool_choice="auto",
             )
@@ -131,7 +187,16 @@ def output_with_retries(
             if attempt == max_retries:
                 error = "TimeoutError"
             time.sleep(2)
+            attempt += 1
         except Exception as e:
+            if not converted_for_single_tool_call:
+                print(
+                    "[Retry] このモデルは1メッセージ内の複数tool_callsに対応していない可能性があるため、"
+                    f"該当ターンを交互形式に変換して再試行します: {e}"
+                )
+                current_messages = split_batched_tool_calls_in_messages(messages)
+                converted_for_single_tool_call = True
+                continue
             print(f"[Error] LLM実行中にエラーが発生しました: {e}")
             error = f"Exception: {e}"
             break
@@ -367,9 +432,9 @@ def main():
     tools = load_tools(args.tools)
     input_data = load_jsonl(args.input)
 
-    model_name, safe_model_name = get_model_and_safe_name(client)
+    model_name, save_model_name = get_model_and_save_name(client)
 
-    output_path = args.output_dir / f"result_{safe_model_name}.jsonl"
+    output_path = args.output_dir / f"result_{save_model_name}.jsonl"
     existing_ids = load_existing_data_ids(output_path)
 
     total = len(input_data)

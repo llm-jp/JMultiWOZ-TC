@@ -18,8 +18,8 @@ JMultiWOZ-TC/
 
 ## Overview
 - Server: Start vLLM as an OpenAI-compatible endpoint using `--enable-auto-tool-choice` and `--tool-call-parser hermes`
-- Generation: [generate.py](generate.py) queries the model through the OpenAI SDK and writes `result_{safe_model_name}.jsonl` in JSONL format
-- Evaluation: [evaluate.py](evaluate.py) compares `jmultiwoz_tc_ground.jsonl` with model outputs and writes the summary to `score_{safe_model_name}.json` and the error log to `incorrect_{safe_model_name}.json`
+- Generation: [generate.py](generate.py) queries the model through the OpenAI SDK and writes `result_{save_model_name}.jsonl` in JSONL format
+- Evaluation: [evaluate.py](evaluate.py) compares `jmultiwoz_tc_ground.jsonl` with model outputs and writes the summary to `score_{save_model_name}.json` and the error log to `incorrect_{save_model_name}.json`
 
 ### File Descriptions
 - `tools.json`: Tool definitions (Function Calling specification). Read by [generate.py](generate.py)
@@ -66,14 +66,14 @@ source .venv/bin/activate
 python generate.py
 ```
 
-When generation finishes, `result_{safe_model_name}.jsonl` will be created based on the model name.
+When generation finishes, `result_{save_model_name}.jsonl` will be created based on the model name.
 
 3) Run evaluation
 ```bash
-python evaluate.py --result result_{safe_model_name}.jsonl
+python evaluate.py --result result_{save_model_name}.jsonl
 ```
 
-The evaluation summary will be printed to the console, and details will be written to `score_{safe_model_name}.json` and `incorrect_{safe_model_name}.json`.
+The evaluation summary will be printed to the console, and details will be written to `score_{save_model_name}.json` and `incorrect_{save_model_name}.json`.
 
 ## Execution Options
 
@@ -93,7 +93,7 @@ Available options:
 - `--openai-api-key` (default: `dummy`)
   - API key used to initialize the OpenAI client
 - `--output-dir` (default: `.`)
-  - Output directory for `result_{safe_model_name}.jsonl`
+  - Output directory for `result_{save_model_name}.jsonl`
 - `--max-retries` (default: `3`)
   - Number of retries for timeouts
 
@@ -101,14 +101,14 @@ Example:
 ```bash
 python generate.py \
 	--base-url http://localhost:8000/v1 \
-	--output-dir .qwen3-14b \
+	--output-dir ./qwen3-14b \
 	--max-retries 5
 ```
 
 ### evaluate.py
 Basic usage:
 ```bash
-python evaluate.py --result result_{safe_model_name}.jsonl
+python evaluate.py --result result_{save_model_name}.jsonl
 ```
 
 Available options:
@@ -129,7 +129,7 @@ python evaluate.py \
 
 ## Output Files
 
-### Generation Result: `result_{safe_model_name}.jsonl`
+### Generation Result: `result_{save_model_name}.jsonl`
 - Created by: `python generate.py`
 - Format: JSONL
 - Purpose: Stores the model's tool call output for each `data_id`
@@ -155,7 +155,7 @@ Main record format (error):
 }
 ```
 
-### Evaluation Summary: `score_{safe_model_name}.json`
+### Evaluation Summary: `score_{save_model_name}.json`
 - Created by: `python evaluate.py --result ...`
 - Format: JSONL
 - Fixed number of lines: 5
@@ -206,7 +206,7 @@ Main record format (error):
   - Call comparison is set-based, so order differences do not matter
 - What it measures: How accurately the model can produce the actual tool call content (function name and arguments)
 
-### Incorrect Log: `incorrect_{safe_model_name}.json`
+### Incorrect Log: `incorrect_{save_model_name}.json`
 - Created by: `python evaluate.py --result ...`
 - Format: JSONL
 - Purpose: Stores incorrect cases, one JSON object per line
