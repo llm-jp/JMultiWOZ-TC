@@ -167,10 +167,25 @@ def test_output_with_retries_timeout_exhausted(monkeypatch):
     assert completions.call_count == 3
 
 
-def test_output_with_retries_generic_exception_breaks_immediately(monkeypatch):
-    """タイムアウト以外の例外は再試行せず、1回で打ち切ってエラー内容を返す。"""
+def test_output_with_retries_generic_exception_recovers_via_fallback():
+    """タイムアウト以外の例外が起きると、交互形式への変換を挟んで1回だけ再試行する。"""
+    response = FakeResponse()
+    completions = FakeCompletions(exceptions=[ValueError("boom")], responses=[response])
+    client = FakeClient(completions)
+
+    result, error = generate.output_with_retries(
+        client, "model", [{"role": "user", "content": "hi"}], [], max_retries=3
+    )
+
+    assert result is response
+    assert error is None
+    assert completions.call_count == 2
+
+
+def test_output_with_retries_generic_exception_twice_breaks_immediately(monkeypatch):
+    """フォールバック後も例外が続く場合は、2回目で打ち切って最後のエラー内容を返す。"""
     monkeypatch.setattr(generate.time, "sleep", lambda seconds: None)
-    completions = FakeCompletions(exceptions=[ValueError("boom")])
+    completions = FakeCompletions(exceptions=[ValueError("boom"), ValueError("boom again")])
     client = FakeClient(completions)
 
     result, error = generate.output_with_retries(
@@ -178,8 +193,8 @@ def test_output_with_retries_generic_exception_breaks_immediately(monkeypatch):
     )
 
     assert result is None
-    assert error == "Exception: boom"
-    assert completions.call_count == 1
+    assert error == "Exception: boom again"
+    assert completions.call_count == 2
 
 
 # --- build_error_record -------------------------------------------------------
