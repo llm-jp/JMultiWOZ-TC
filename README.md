@@ -96,13 +96,16 @@ python generate.py
 	- `result_{save_model_name}.jsonl` の出力先ディレクトリ
 - `--max-retries` (既定: `3`)
 	- タイムアウト時の再試行回数
+- `--batch-size` (既定: `4`)
+	- 同時に実行するリクエスト数(vLLMサーバーの同時実行許容度に合わせて調整してください)
 
 実行例:
 ```bash
 python generate.py \
 	--base-url http://localhost:8000/v1 \
 	--output-dir ./qwen3-14b \
-	--max-retries 5
+	--max-retries 5 \
+	--batch-size 8
 ```
 
 ### evaluate.py
