@@ -279,7 +279,7 @@ def aggregate_overall_metrics(
     """全体評価の集計
 
     全レコードを走査し、モデル出力の tool call 集合と正解の tool call 集合が
-    厳密一致しているかを判定して、全体指標を集計する。
+    一致しているかを判定して、全体指標を集計する。
     一致判定は `tool_calls_match` で実行する。
     `judge` に `LLMJudge` を渡した場合、
     `area`,`station`,`genre`,`name`,`arrivalpoint`,`departurepoint` 引数は
@@ -295,12 +295,12 @@ def aggregate_overall_metrics(
         judge: `NullJudge` または `LLMJudge` のインスタンス。Noneの場合は厳密一致のみで判定する。
 
     Returns:
-        tuple: `(stats, incorrect_logs)` の2要素タプル。
+        tuple: `(stats, incorrect_logs, judge_correct_logs, judge_incorrect_logs)` の4要素タプル。
             - stats (dict): 全体評価の集計結果。
                 - total (int): 総データ件数。
                 - evaluated (int): 評価対象件数 (total - error)。
-                - correct (int): 厳密一致した件数。
-                - incorrect (int): 厳密不一致の件数。
+                - correct (int): 一致した件数。
+                - incorrect (int): 不一致の件数。
                 - error (int): 出力ミス等により未評価となった件数。
                 - acc (float): 正答率(%)。
                 - judge_rescued (int): 文字列としては不一致だがLLM-as-a-judgeにより一致と判定された件数。
@@ -538,11 +538,12 @@ def aggregate_tool_call_metrics(
     data_id2ground_truth,
     data_id2question,
     data_id2dialogue_id,
+    judge=None,
 ):
     """tool call精度の集計
 
     正解がツールを使用するケース (`ground_truth` が非空) に限定して
-    tool call 内容の厳密一致精度を集計する。
+    tool call 内容の一致精度を集計する。
     `aggregate_overall_metrics` を再利用し、正解がツールを使用するケースのみをフィルタして評価する。
     score 集計は維持しつつ、実際にツールを使用した不一致のみを誤答ログに保存する。
     対象ケースで `error` がある場合は `error` のみ加算して未評価とする。
@@ -552,33 +553,39 @@ def aggregate_tool_call_metrics(
         data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
         data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
         data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
+        judge: `NullJudge` または `LLMJudge` のインスタンス。
 
     Returns:
-        tuple: `(func_stats, incorrect_call_precision)` の2要素タプル。
+        tuple: `(func_stats, incorrect_call_precision, judge_correct_logs, judge_incorrect_logs)` の4要素タプル。
             - func_stats (dict): tool call 精度の集計結果
-              (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`)。
+              (`total`, `evaluated`, `correct`, `incorrect`, `error`, `acc`, `judge_rescued`)。
             - incorrect_call_precision (list):
               tool call 精度が不一致だったケースの誤答ログ配列。
+            - judge_correct_logs (list):
+              LLM-as-a-judgeにより正解(一致)と判定されたケースのログ配列。
+            - judge_incorrect_logs (list):
+              LLM-as-a-judgeが呼ばれたが不正解(不一致)のままだったケースのログ配列。
     """
     filtered_data = [
-        rec for rec in result_data if data_id2ground_truth.get(rec.get("data_id"), [])
+        rec for rec in result_data
+        if data_id2ground_truth.get(rec.get("data_id"), [])
     ]
 
-    func_stats, incorrect_call_precision = aggregate_overall_metrics(
+    func_stats, incorrect_call_precision, judge_correct_logs, judge_incorrect_logs = aggregate_overall_metrics(
         filtered_data,
         data_id2ground_truth,
         data_id2question=data_id2question,
         data_id2dialogue_id=data_id2dialogue_id,
         incorrect_genre="tool call精度",
+        judge=judge,
     )
 
     incorrect_call_precision = [
-        bad
-        for bad in incorrect_call_precision
+        bad for bad in incorrect_call_precision
         if normalize_tool_calls(bad.get("output", []))
     ]
 
-    return func_stats, incorrect_call_precision
+    return func_stats, incorrect_call_precision, judge_correct_logs, judge_incorrect_logs
 
 
 def evaluate_results(
@@ -595,30 +602,24 @@ def evaluate_results(
         data_id2ground_truth (dict): `data_id` をキーにした `ground_truth` を値とする辞書。
         data_id2question (dict): `data_id` をキーにした `question` を値とする辞書。
         data_id2dialogue_id (dict): `data_id` をキーにした `dialogue_id` を値とする辞書。
+        judge: `NullJudge` または `LLMJudge` のインスタンス。
 
     Returns:
-        tuple: `(accuracies, incorrect_call_precision, incorrect_use_judgement, incorrect_nouse_judgement)` の4要素のタプル。
+        tuple: `(accuracies, incorrect_call_precision, incorrect_use_judgement, incorrect_nouse_judgement,
+        judge_correct_logs, judge_incorrect_logs)` の6要素のタプル。
             - accuracies (dict): 各種指標の正答率を含む要約を格納した辞書。
             - incorrect_call_precision (list): ツール呼び出し精度が誤っているケースのログ。
             - incorrect_use_judgement (list): ツール使用判断が誤っているケースのログ。
             - incorrect_nouse_judgement (list): ツール不使用判断が誤っているケースのログ。
+            - judge_correct_logs (list): LLM-as-a-judgeにより正解と判定されたケースのログ。
+            - judge_incorrect_logs (list): LLM-as-a-judgeが呼ばれたが不正解のままだったケースのログ。
     """
     total = len(result_data)
     print(f"評価開始: {total}件のデータを処理します\n")
 
-    overall_stats, _ = aggregate_overall_metrics(result_data, data_id2ground_truth)
+    overall_stats, _, _, _ = aggregate_overall_metrics(result_data, data_id2ground_truth, judge=judge)
 
-    (
-        use_stats,
-        nouse_stats,
-        incorrect_use_judgement,
-        incorrect_nouse_judgement,
-    ) = aggregate_tool_usage_metrics(
-        result_data,
-        data_id2ground_truth,
-        data_id2question,
-        data_id2dialogue_id,
-    )
+    (use_stats, nouse_stats, incorrect_use_judgement, incorrect_nouse_judgement,) = aggregate_tool_usage_metrics(result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id,)
 
     # use_stats と nouse_stats を統合して use_or_nouse_stats を計算
     use_or_nouse_total = use_stats["total"] + nouse_stats["total"]
@@ -626,11 +627,7 @@ def evaluate_results(
     use_or_nouse_correct = use_stats["correct"] + nouse_stats["correct"]
     use_or_nouse_incorrect = use_stats["incorrect"] + nouse_stats["incorrect"]
     use_or_nouse_evaluated = use_or_nouse_total - use_or_nouse_error
-    use_or_nouse_acc = (
-        use_or_nouse_correct / use_or_nouse_evaluated * 100
-        if use_or_nouse_evaluated > 0
-        else 0
-    )
+    use_or_nouse_acc = use_or_nouse_correct / use_or_nouse_evaluated * 100 if use_or_nouse_evaluated > 0 else 0
 
     use_or_nouse_stats = {
         "total": use_or_nouse_total,
@@ -641,11 +638,12 @@ def evaluate_results(
         "acc": use_or_nouse_acc,
     }
 
-    call_stats, incorrect_call_precision = aggregate_tool_call_metrics(
+    call_stats, incorrect_call_precision, judge_correct_logs, judge_incorrect_logs = aggregate_tool_call_metrics(
         result_data,
         data_id2ground_truth,
         data_id2question,
         data_id2dialogue_id,
+        judge=judge,
     )
 
     accuracies = {
@@ -661,6 +659,8 @@ def evaluate_results(
         incorrect_call_precision,
         incorrect_use_judgement,
         incorrect_nouse_judgement,
+        judge_correct_logs,
+        judge_incorrect_logs,
     )
 
 
@@ -700,6 +700,7 @@ def write_summary(
             "不正解数": overall["incorrect"],
             "出力ミスのデータ数": overall["error"],
             "全体の正答率(%)": overall["acc"],
+            "LLM-as-a-judgeによる救済数": overall.get("judge_rescued", 0),
         }
         used_summary = {
             "評価項目": "ツール使用判断",
@@ -736,6 +737,7 @@ def write_summary(
             "不正解数": call["incorrect"],
             "出力ミスのデータ数": call["error"],
             "全体の正答率(%)": call["acc"],
+            "LLM-as-a-judgeによる救済数": call.get("judge_rescued", 0),
         }
 
         out_f.write(json.dumps(all_summary, ensure_ascii=False) + "\n")
@@ -782,6 +784,22 @@ def write_incorrect_logs(
         for bad in incorrect_nouse_judgement:
             out_f.write(json.dumps(bad, ensure_ascii=False) + "\n")
 
+def write_judge_logs(output_path: Path, judge_logs: list):
+    """LLM-as-a-judgeの判定ログを書き出す
+
+    LLM-as-a-judgeが実際に呼ばれたケースのログをJSONL形式で出力する。
+    各行には `judged_fields` として、問い合わせた
+    (`tool_name`,`key`,`gt_value`,`out_value`,`equivalent`) の一覧を含む。
+
+    Args:
+        output_path (Path): 出力ファイルパス。
+        judge_logs (list): 書き出すログ配列
+            (`judge_correct_logs` または `judge_incorrect_logs`)。
+
+    Returns:
+        None: なし。
+    """
+    raise NotImplementedError()
 
 def print_summary_to_console(accuracies: dict):
     """要約をコンソール出力
