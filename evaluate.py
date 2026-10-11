@@ -122,18 +122,20 @@ def canonicalize_arguments(args: dict):
 
 
 def normalize_tool_calls(tool_calls):
-    """ツール呼び出しを比較可能な集合へ正規化
+    """ツール呼び出しを比較可能なリストへ正規化
 
-    ツール呼び出し配列を (関数名, 正規化した引数文字列) の集合へ変換する。
+    ツール呼び出し配列を (関数名, 正規化した引数文字列) のソート済みリストへ変換する。
+    呼び出し順は無視するが、重複は保持する。そのため、同一内容の呼び出しを
+    複数回出力している場合は、1回だけ呼び出している場合と一致しない。
 
     Args:
         tool_calls (list[dict]): ツール呼び出し配列。
 
     Returns:
-        set: `(name, canonical_args_str)` の集合。
+        list: `(name, canonical_args_str)` のソート済みリスト。
     """
     if not tool_calls:
-        return set()
+        return []
 
     normalized = []
     for call in tool_calls:
@@ -151,7 +153,7 @@ def normalize_tool_calls(tool_calls):
         args_canonical = canonicalize_arguments(raw_args)
         normalized.append((name, args_canonical))
 
-    return set(normalized)
+    return sorted(normalized)
 
 
 def arguments_match(
@@ -190,6 +192,7 @@ def tool_calls_match(
     JMultiWOZ-TC の ground_truth 内でツール名が重複しないことを前提に、
     ツール名をキーとして対応する呼び出し同士の引数を比較する。
     呼び出されたツール名の集合が異なる場合は不一致とする。
+    モデル出力が同名のツールを複数回呼んでいる場合も不一致とする。
 
     Args:
         output_calls (list[dict]): モデル出力のツール呼び出し配列。
@@ -207,8 +210,14 @@ def tool_calls_match(
                 result[call["name"]] = call.get("arguments")
         return result
 
+    def count_named_calls(calls):
+        return sum(1 for call in calls or [] if isinstance(call, dict) and call.get("name") is not None)
+
     gt_by_name = to_name_map(ground_truth_calls)
     out_by_name = to_name_map(output_calls)
+
+    if count_named_calls(output_calls) != len(out_by_name):
+        return False
 
     if set(gt_by_name.keys()) != set(out_by_name.keys()):
         return False
@@ -350,7 +359,8 @@ def aggregate_overall_metrics(
 
         if is_match:
             correct += 1
-            judge_rescued += 1
+            if any(field["equivalent"] for field in judge_log):
+                judge_rescued += 1
             if judge_log:
                 judge_correct_logs.append(
                     {
@@ -589,7 +599,7 @@ def aggregate_tool_call_metrics(
 
 
 def evaluate_results(
-    result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id
+    result_data, data_id2ground_truth, data_id2question, data_id2dialogue_id, judge=None
 ):
     """結果比較とメトリクス集計
 
@@ -828,7 +838,7 @@ def print_summary_to_console(accuracies: dict):
     print("評価結果(要約)")
     print(f"{'=' * 80}")
     print(
-        f"全体: 総{overall['total']} / 対象{overall['evaluated']} / ミス{overall['error']} / 正答率{overall['acc']:.2f}%"
+        f"全体: 総{overall['total']} / 対象{overall['evaluated']} / ミス{overall['error']} / 正答率{overall['acc']:.2f}% / judge救済{overall.get('judge_rescued', 0)}"
     )
     print(
         f"ツール使用判断: 総{used['total']} / 対象{used['evaluated']} / ミス{used['error']} / 正答率{used['acc']:.2f}%"
@@ -840,7 +850,7 @@ def print_summary_to_console(accuracies: dict):
         f"ツール使用・不使用判断: 総{use_or_nouse['total']} / 対象{use_or_nouse['evaluated']} / ミス{use_or_nouse['error']} / 正答率{use_or_nouse['acc']:.2f}%"
     )
     print(
-        f"tool call精度: 総{call['total']} / 対象{call['evaluated']} / ミス{call['error']} / 正答率{call['acc']:.2f}%"
+        f"tool call精度: 総{call['total']} / 対象{call['evaluated']} / ミス{call['error']} / 正答率{call['acc']:.2f}% / judge救済{call.get('judge_rescued', 0)}"
     )
 
 
