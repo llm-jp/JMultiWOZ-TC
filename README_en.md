@@ -96,13 +96,16 @@ Available options:
   - Output directory for `result_{save_model_name}.jsonl`
 - `--max-retries` (default: `3`)
   - Number of retries for timeouts
+- `--batch-size` (default: `4`)
+  - Number of requests to run concurrently (tune to match the vLLM server's concurrency capacity)
 
 Example:
 ```bash
 python generate.py \
 	--base-url http://localhost:8000/v1 \
 	--output-dir ./qwen3-14b \
-	--max-retries 5
+	--max-retries 5 \
+	--batch-size 8
 ```
 
 ### evaluate.py

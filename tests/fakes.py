@@ -4,6 +4,8 @@
 両方から利用する。
 """
 
+import threading
+
 import httpx
 from openai import APITimeoutError
 
@@ -45,20 +47,28 @@ class FakeResponse:
 
 
 class FakeCompletions:
-    """呼び出し回数の記録と、例外/レスポンスの差し替えができるcreate()を提供する。"""
+    """呼び出し回数の記録と、例外/レスポンスの差し替えができるcreate()を提供する。
+
+    複数スレッドから並行に呼ばれても call_count や内部状態が壊れないよう、
+    Lock で保護する。
+    """
 
     def __init__(self, responses=None, exceptions=None):
         self._responses = list(responses or [])
         self._exceptions = list(exceptions or [])
+        self._state_lock = threading.Lock()
         self.call_count = 0
 
     def create(self, **kwargs):
-        self.call_count += 1
-        if self._exceptions:
-            raise self._exceptions.pop(0)
-        return (
-            self._responses.pop(0) if len(self._responses) > 1 else self._responses[0]
-        )
+        with self._state_lock:
+            self.call_count += 1
+            if self._exceptions:
+                raise self._exceptions.pop(0)
+            return (
+                self._responses.pop(0)
+                if len(self._responses) > 1
+                else self._responses[0]
+            )
 
 
 class FakeChat:
